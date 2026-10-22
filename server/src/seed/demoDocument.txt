@@ -1,0 +1,13 @@
+/*
+ * Planted issue map (review only the marketing copy after this comment):
+ * 1. “NimbusNotes” in the opening sentence: incorrect product spelling (TERM-01).
+ * 2. “the best” in the opening sentence: unsupported superlative (CLAIM-01).
+ * 3. “cheap” in the Plus pricing sentence: banned terminology (TERM-03).
+ * 4. “guys” in the following team-invitation sentence: non-inclusive terminology (TERM-04).
+ * 5. “$8 per user each month” in the pricing sentence: omits “billed annually” (LEGAL-01).
+ * 6. “25 million registered accounts” and “42 integrations”: match FACT-01 and FACT-03.
+ * 7. “30 million active users”: contradicts the approved account count in FACT-01.
+ * 8. “twice as creative” and “eliminate missed deadlines”: claims with no supporting fact.
+ */
+
+NimbusNotes is the best place to collect ideas, organize projects, and keep important notes close at hand. Built for people who want a simple workspace without sacrificing useful tools, Nimbus Notes brings writing and collaboration together in one calm, searchable home. Our Plus plan is cheap at $8 per user each month. Teams can invite their guys to add notes, share context, and keep work moving. Nimbus Notes has 25 million registered accounts. It supports 42 integrations, so you can connect the tools you already use. More than 30 million active users trust us every day. Our smart workspace makes every team twice as creative. Shared pages help colleagues contribute in one place, while reminders eliminate missed deadlines for every user. Start with a personal notebook, then create shared workspaces as projects grow. You can open your notes on web, iOS, and Android, attach reference files, and search across your workspace when you need a detail again. Nimbus Notes is designed for thoughtful work: capture an idea, turn it into a useful plan, and give your team a clearer place to collaborate.

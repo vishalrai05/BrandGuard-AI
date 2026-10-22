@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: brandguard-ai-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.20.2
+      - key: MONGODB_URI
+        sync: false
+      - key: CLIENT_URL
+        value: https://your-app.vercel.app,http://localhost:5173
