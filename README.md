@@ -113,8 +113,6 @@ Copy the example env files and replace placeholders locally. Never commit `.env`
 
 ### Live URL placeholders
 
-- Frontend: `https://your-app.vercel.app`
-- Backend: `https://your-brandguard-api.onrender.com`
-- Health: `https://your-brandguard-api.onrender.com/api/health`
-
-Replace these placeholders with the URLs assigned by your deployments.
+-  Live demo: `https://brand-guard-ai-pi.vercel.app`
+- Backend: ` https://brandguard-ai-inwv.onrender.com`
+- Health: `https://brandguard-ai-inwv.onrender.com/api/health`
