@@ -16,7 +16,9 @@ export async function analyze(prompt, { signal } = {}) {
       maxOutputTokens: 4096,
       abortSignal: signal,
       httpOptions: {
-        timeout: 8_000,
+        // Gemini rejects request deadlines shorter than 10 seconds. The analyzer
+        // still aborts locally after 8 seconds and falls back to deterministic results.
+        timeout: 10_000,
         retryOptions: { attempts: 1 },
       },
     },
