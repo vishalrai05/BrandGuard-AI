@@ -294,7 +294,7 @@ function ReviewPage({
         {review && <div className="review-meta"><BookOpenCheck size={16} /> {review.findings.length} findings <span>·</span> Updated {new Date(review.updatedAt ?? review.createdAt).toLocaleDateString()}</div>}
       </div>
 
-      {slowRequest && <div className="waking-message" role="status" aria-live="polite">Waking up the server, this can take up to a minute</div>}
+      {slowRequest && <div className="waking-message" role="status" aria-live="polite">This is taking longer than usual. The server may be starting up or still processing your request.</div>}
       {error && !inputOpen && (
         <div className="inline-error" role="alert">
           <div><strong>Something went wrong</strong><p>{error}</p></div>
@@ -306,7 +306,7 @@ function ReviewPage({
         <p className="inline-warning" role="status">AI unavailable, showing rule-based results only.</p>
       )}
 
-      {pageState === 'loading' && id && <LoadingState label={slowRequest ? 'Waking up the server, this can take up to a minute' : 'Loading saved review…'} />}
+      {pageState === 'loading' && id && <LoadingState label={slowRequest ? 'Still loading; the server may be starting up or processing your request.' : 'Loading saved review…'} />}
       {!review && !id && (
         <div className="empty-review-layout">
           <EmptyState />
