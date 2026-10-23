@@ -1,7 +1,7 @@
 import aiProvider from './aiProvider.js'
 import splitSentences from '../review/splitSentences.js'
 
-const DEFAULT_TIMEOUT_MS = 8_000
+const DEFAULT_TIMEOUT_MS = 15_000
 const severities = new Set(['high', 'medium', 'low'])
 const types = new Set(['rule_violation', 'fact_mismatch', 'needs_verification'])
 
