@@ -25,13 +25,14 @@ test('AI analyzer accepts valid evidence-backed findings and batches their rewri
     logger: { info() {}, warn() {} },
   })
 
-  const findings = await analyze(input)
+  const { findings, counts } = await analyze(input)
   assert.equal(findings.length, 1)
   assert.equal(findings[0].source, 'ai')
   assert.equal(findings[0].startIndex, 0)
   assert.equal(findings[0].endIndex, input.text.length)
   assert.equal(findings[0].evidence.refCode, 'TONE-01')
   assert.equal(findings[0].suggestedRewrite, 'Nimbus Notes helps people organize their work.')
+  assert.deepEqual(counts, { returned: 1, kept: 1, dropped: 0 })
 })
 
 test('AI analyzer rejects invalid JSON so caller can use deterministic-only results', async () => {
@@ -49,7 +50,9 @@ test('AI analyzer drops findings that cite a hallucinated Rule or Fact code', as
     ]),
     logger: { info() {}, warn() {} },
   })
-  assert.deepEqual(await analyze(input), [])
+  const result = await analyze(input)
+  assert.deepEqual(result.findings, [])
+  assert.deepEqual(result.counts, { returned: 1, kept: 0, dropped: 1 })
 })
 
 test('AI analyzer drops findings whose matched text is not verbatim in the input', async () => {
@@ -59,5 +62,67 @@ test('AI analyzer drops findings whose matched text is not verbatim in the input
     ]),
     logger: { info() {}, warn() {} },
   })
-  assert.deepEqual(await analyze(input), [])
+  const result = await analyze(input)
+  assert.deepEqual(result.findings, [])
+  assert.deepEqual(result.counts, { returned: 1, kept: 0, dropped: 1 })
+})
+
+test('AI analyzer accepts needs_verification without a ref and matches case and whitespace flexibly', async () => {
+  const text = 'Our users absolutely adore us,\nand everyone is switching to Nimbus Notes.'
+  const analyze = createAIAnalyzer({
+    provider: mockedProvider([
+      '[{"matchedText":"OUR USERS   ABSOLUTELY adore us, and everyone is switching to Nimbus Notes.","type":"needs_verification","refCode":null,"severity":"medium","reason":"Unsupported social proof.","suggestion":"Add evidence or qualify this claim."}]',
+      '[{"index":0,"suggestedRewrite":"Customers can use Nimbus Notes to organize their notes."}]',
+    ]),
+    logger: { info() {}, warn() {} },
+  })
+
+  const { findings, counts } = await analyze({ ...input, text })
+  assert.equal(findings.length, 1)
+  assert.equal(findings[0].matchedText, text)
+  assert.equal(text.slice(findings[0].startIndex, findings[0].endIndex), text)
+  assert.deepEqual(findings[0].evidence, { kind: 'none', refCode: '', excerpt: '' })
+  assert.deepEqual(counts, { returned: 1, kept: 1, dropped: 0 })
+})
+
+test('AI analyzer logs parse and dropped-item reasons without losing counts', async () => {
+  const logs = []
+  const analyze = createAIAnalyzer({
+    provider: mockedProvider([
+      '[{"matchedText":"not present","type":"needs_verification","refCode":null,"severity":"medium","reason":"Unsupported.","suggestion":"Qualify."},{"matchedText":"Our users love Nimbus Notes.","type":"rule_violation","refCode":"FAKE","severity":"medium","reason":"Unsupported.","suggestion":"Revise."}]',
+    ]),
+    logger: { info: (message) => logs.push(message), warn: (message) => logs.push(message) },
+  })
+  const result = await analyze(input)
+  assert.deepEqual(result.counts, { returned: 2, kept: 0, dropped: 2 })
+  assert.ok(logs.some((line) => line.includes('analysis raw response:')))
+  assert.ok(logs.some((line) => line.includes('analysis parsed items: 2')))
+  assert.ok(logs.some((line) => line.includes('matchedText not found verbatim')))
+  assert.ok(logs.some((line) => line.includes('unknown refCode')))
+})
+
+test('AI analyzer reports invalid JSON in server logs', async () => {
+  const logs = []
+  const analyze = createAIAnalyzer({
+    provider: mockedProvider(['not json']),
+    logger: { info: (message) => logs.push(message), warn: (message) => logs.push(message) },
+  })
+  await assert.rejects(analyze(input), SyntaxError)
+  assert.ok(logs.some((line) => line.includes('dropped response: invalid JSON')))
+})
+
+test('AI analyzer logs invalid schemas and overlaps with deterministic findings', async () => {
+  const logs = []
+  const deterministicFindings = [{ startIndex: 0, endIndex: 29, source: 'rules' }]
+  const analyze = createAIAnalyzer({
+    provider: mockedProvider([
+      '[{"matchedText":"Our users love Nimbus Notes.","type":"needs_verification","refCode":null,"severity":"medium","reason":"Unsupported.","suggestion":"Qualify."},{"matchedText":"Our users love Nimbus Notes.","type":"needs_verification","refCode":null,"severity":"medium","reason":"Unsupported.","suggestion":"Qualify.","extra":"unexpected"}]',
+      '[]',
+    ]),
+    logger: { info: (message) => logs.push(message), warn: (message) => logs.push(message) },
+  })
+  const result = await analyze({ ...input, deterministicFindings })
+  assert.deepEqual(result.counts, { returned: 2, kept: 0, dropped: 2 })
+  assert.ok(logs.some((line) => line.includes('duplicate of rule finding')))
+  assert.ok(logs.some((line) => line.includes('invalid schema')))
 })

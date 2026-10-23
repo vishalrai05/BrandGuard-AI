@@ -34,22 +34,25 @@ export async function runReview({ text, brandName, useAI = true }) {
   const factFindings = factMatcher(claims, facts)
   const deterministicFindings = buildFindings(ruleFindings, factFindings)
   let findings = deterministicFindings
-  let aiStatus = useAI ? 'ok' : 'disabled'
+  let aiStatus = 'ok'
+  let counts = { returned: 0, kept: 0, dropped: 0 }
 
   if (useAI) {
     try {
-      const aiFindings = await analyzeWithAI({
+      const aiResult = await analyzeWithAI({
         text,
         rules,
         facts,
         deterministicFindings,
       })
-      findings = buildFindings(deterministicFindings, aiFindings)
-    } catch {
+      counts = aiResult.counts
+      findings = buildFindings(deterministicFindings, aiResult.findings)
+    } catch (error) {
       aiStatus = 'unavailable'
+      counts = error.counts ?? counts
       findings = deterministicFindings
     }
   }
 
-  return { findings, summary: summarize(findings), aiStatus }
+  return { findings, summary: summarize(findings), aiStatus, counts }
 }

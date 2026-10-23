@@ -23,7 +23,7 @@ test('review engine detects planted issues and preserves evidence offsets', asyn
   Fact.find = () => ({ lean: async () => facts })
 
   try {
-    const { findings, summary } = await runReview({
+    const { findings, summary, aiStatus, counts } = await runReview({
       text: demoText,
       brandName: 'Nimbus Notes',
       useAI: false,
@@ -134,6 +134,8 @@ test('review engine detects planted issues and preserves evidence offsets', asyn
     }
 
     assert.equal(summary.total, findings.length)
+    assert.equal(aiStatus, 'ok')
+    assert.deepEqual(counts, { returned: 0, kept: 0, dropped: 0 })
     assert.equal(
       summary.needsVerification,
       unsupportedClaims.length,

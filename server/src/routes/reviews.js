@@ -36,7 +36,7 @@ router.post('/', createReviewLimiter, async (req, res) => {
   }
 
   const reviewBrandName = brandName?.trim() ?? 'Nimbus Notes'
-  const { findings, summary, aiStatus } = await runReview({
+  const { findings, summary, aiStatus, counts } = await runReview({
     text: reviewText,
     brandName: reviewBrandName,
     useAI: req.body?.useAI !== false,
@@ -47,6 +47,7 @@ router.post('/', createReviewLimiter, async (req, res) => {
     findings,
     summary,
     aiStatus,
+    counts,
   })
 
   res.status(201).json(review)

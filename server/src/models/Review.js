@@ -37,12 +37,22 @@ const summarySchema = new mongoose.Schema(
   { _id: false },
 )
 
+const countsSchema = new mongoose.Schema(
+  {
+    returned: { type: Number, default: 0, min: 0 },
+    kept: { type: Number, default: 0, min: 0 },
+    dropped: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false },
+)
+
 const reviewSchema = new mongoose.Schema(
   {
     inputText: { type: String, required: true },
     brandName: { type: String, required: true, trim: true },
     findings: { type: [findingSchema], default: [] },
     summary: { type: summarySchema, default: () => ({}) },
+    counts: { type: countsSchema, default: () => ({}) },
     aiStatus: { type: String, enum: ['ok', 'unavailable', 'disabled'], default: 'disabled' },
   },
   { timestamps: true },
