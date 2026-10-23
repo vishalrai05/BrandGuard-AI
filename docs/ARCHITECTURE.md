@@ -15,7 +15,13 @@ The deterministic review pipeline splits submitted text into sentences while pre
 
 Deterministic checks run first so explicit brand rules and approved facts provide repeatable, auditable results. A claim is only called a fact mismatch when a relevant approved fact exists and its numbers disagree; without supporting evidence, it is marked “Needs verification” rather than false. Each finding links to the matching Rule or Fact code and evidence excerpt when available.
 
-The review engine orchestration is the future AI integration seam. An optional AI analysis step can be plugged in after deterministic checks, with its output still subject to evidence linking and finding de-duplication.
+The review engine runs deterministic checks first, then optionally invokes the AI layer. AI findings are advisory additions; deterministic findings take precedence when spans overlap. The Gemini output validator requires verbatim text and a known Rule/Fact code, or `needs_verification` with no evidence code. Invalid JSON, unknown codes, unsupported text spans, timeouts, and provider failures produce deterministic-only results with `aiStatus: unavailable`. Turning the toggle off skips provider calls (`aiStatus: disabled`).
+
+### AI-assisted analysis and guardrails
+
+`services/ai/aiProvider.js` wraps Google's official `@google/genai` Node SDK and selects `AI_MODEL` from server environment configuration (default `gemini-3.8-flash`). `aiAnalyzer.js` makes at most one structured analysis call and one batched rewrite call per review, each with an eight-second timeout. The prompt focuses on nuanced tone, paraphrased or implied claims, and sentence-specific suggestions. The validator strips optional Markdown fences, parses JSON, verifies evidence codes and exact source text, derives offsets from the original input, and removes deterministic duplicates/overlaps. Rewrites are returned as drafts and are never considered evidence or approval.
+
+AI is enabled by default in the input panel but can be disabled per review. API keys remain server-side. Input is limited to 10,000 characters and review creation is rate-limited. Each provider call logs elapsed time. Any AI failure leaves deterministic findings available and records `aiStatus: unavailable`; the UI explains this fallback. AI outputs can still be incomplete or make poor editorial suggestions, so reviewers must verify suggestions before publication.
 
 ## Frontend
 
@@ -23,7 +29,7 @@ The review engine orchestration is the future AI integration seam. An optional A
 
 `HighlightedText` partitions the original input at finding offset boundaries, then renders each text segment once. Overlapping findings share a segment instead of duplicating source text; selecting a segment/card links the two panes and marks the active item. Findings retain the API's offsets and are never applied as text replacements.
 
-The state flow uses the small API client to submit content, retrieve reviews/rules/facts, and patch finding status. The returned review becomes the source of truth for rendered results; status updates replace it with the persisted API response. A later optional AI analysis can be surfaced through the same evidence-aware findings interface.
+The state flow uses the small API client to submit content, retrieve reviews/rules/facts, and patch finding status. The returned review becomes the source of truth for rendered results; status updates replace it with the persisted API response. AI findings use the same evidence-aware findings interface and carry a source badge.
 
 ## Design system and frontend structure
 

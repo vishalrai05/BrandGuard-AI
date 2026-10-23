@@ -10,5 +10,9 @@ services:
         value: 20.20.2
       - key: MONGODB_URI
         sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: gemini-3.8-flash
       - key: CLIENT_URL
         value: https://your-app.vercel.app,http://localhost:5173

@@ -15,6 +15,7 @@ if (allowedOrigins.length === 0) {
 }
 
 const app = express()
+app.set('trust proxy', 1)
 
 app.use(
   cors({

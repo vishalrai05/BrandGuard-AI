@@ -2,38 +2,51 @@ import { Router } from 'express'
 import mongoose from 'mongoose'
 import Review from '../models/Review.js'
 import { runReview } from '../services/review/reviewEngine.js'
+import { rateLimit } from 'express-rate-limit'
 
 const router = Router()
 const MAX_INPUT_LENGTH = 10_000
 const findingStatuses = new Set(['open', 'accepted', 'dismissed'])
+const createReviewLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many reviews. Please try again later.' },
+})
 
-router.post('/', async (req, res) => {
+router.post('/', createReviewLimiter, async (req, res) => {
   const { inputText, brandName } = req.body ?? {}
 
-  if (typeof inputText !== 'string' || !inputText.trim()) {
+  if (typeof inputText !== 'string') {
     return res.status(400).json({ error: 'inputText must be a non-empty string.' })
   }
 
-  if (inputText.length > MAX_INPUT_LENGTH) {
-    return res.status(400).json({
-      error: `inputText must be ${MAX_INPUT_LENGTH} characters or fewer.`,
-    })
+  const reviewText = inputText.slice(0, MAX_INPUT_LENGTH)
+  if (!reviewText.trim()) {
+    return res.status(400).json({ error: 'inputText must be a non-empty string.' })
   }
 
   if (brandName !== undefined && (typeof brandName !== 'string' || !brandName.trim())) {
     return res.status(400).json({ error: 'brandName must be a non-empty string when provided.' })
   }
 
+  if (req.body?.useAI !== undefined && typeof req.body.useAI !== 'boolean') {
+    return res.status(400).json({ error: 'useAI must be a boolean when provided.' })
+  }
+
   const reviewBrandName = brandName?.trim() ?? 'Nimbus Notes'
-  const { findings, summary } = await runReview({
-    text: inputText,
+  const { findings, summary, aiStatus } = await runReview({
+    text: reviewText,
     brandName: reviewBrandName,
+    useAI: req.body?.useAI !== false,
   })
   const review = await Review.create({
-    inputText,
+    inputText: reviewText,
     brandName: reviewBrandName,
     findings,
     summary,
+    aiStatus,
   })
 
   res.status(201).json(review)

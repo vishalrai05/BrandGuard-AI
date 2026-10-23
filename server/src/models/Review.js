@@ -16,6 +16,9 @@ const findingSchema = new mongoose.Schema({
     excerpt: { type: String, default: '' },
   },
   suggestion: { type: String, default: '' },
+  suggestedRewrite: { type: String, default: '' },
+  reason: { type: String, default: '' },
+  source: { type: String, enum: ['rules', 'ai'], default: 'rules' },
   status: {
     type: String,
     enum: ['open', 'accepted', 'dismissed'],
@@ -40,6 +43,7 @@ const reviewSchema = new mongoose.Schema(
     brandName: { type: String, required: true, trim: true },
     findings: { type: [findingSchema], default: [] },
     summary: { type: summarySchema, default: () => ({}) },
+    aiStatus: { type: String, enum: ['ok', 'unavailable', 'disabled'], default: 'disabled' },
   },
   { timestamps: true },
 )

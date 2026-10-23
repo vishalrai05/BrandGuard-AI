@@ -4,7 +4,7 @@ const MAX_CHARACTERS = 10_000
 
 function InputPanel({
   inputText, brandName, loading, onTextChange, onBrandNameChange,
-  onLoadSample, onReview, onClear,
+  onLoadSample, onReview, onClear, useAI = true, onUseAIChange = () => {},
 }) {
   return (
     <section className="input-panel">
@@ -23,6 +23,11 @@ function InputPanel({
         placeholder="Paste a product announcement, landing page, or campaign copy..."
         value={inputText}
       />
+      <label className="ai-toggle">
+        <input checked={useAI} disabled={loading} onChange={(event) => onUseAIChange(event.target.checked)} type="checkbox" />
+        <span>AI-assisted analysis</span>
+        <small>On by default; findings are checked against your approved rules and facts.</small>
+      </label>
       <div className="input-foot">
         <span aria-live="polite" className="char-count">{inputText.length.toLocaleString()} / {MAX_CHARACTERS.toLocaleString()} characters</span>
         <div className="input-actions">

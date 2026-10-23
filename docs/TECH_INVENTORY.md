@@ -17,6 +17,10 @@
 | dotenv | library | Load server environment variables from `.env`. | 18.0.8 |
 | Mongoose | library | MongoDB object modeling and connection. | 9.11.3 |
 | nodemon | library | Restart the server during development. | 3.1.14 |
+| `@google/genai` | library | Official Google Gemini Node SDK for optional evidence-constrained analysis and batched rewrites. | 1.52.0 |
+| `express-rate-limit` | library | Limit review creation requests per client IP. | 8.7.1 |
+| Gemini 3.8 Flash (`gemini-3.8-flash`) | model | AI-assisted tone/claim analysis and suggested sentence rewrites; output is validated against library evidence. | Stable |
+| `AI_API_KEY`, `AI_MODEL` | environment | Server-only Gemini credentials and model selection. | â€” |
 | Rule | model | Store approved, categorized brand rules. | — |
 | Fact | model | Store verified brand claims with sources and keywords. | — |
 | Review | model | Store review submissions, summaries, and embedded findings. | — |

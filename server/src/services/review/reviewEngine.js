@@ -5,8 +5,21 @@ import claimDetector from './claimDetector.js'
 import factMatcher from './factMatcher.js'
 import ruleChecker from './ruleChecker.js'
 import splitSentences from './splitSentences.js'
+import analyzeWithAI from '../ai/aiAnalyzer.js'
 
-export async function runReview({ text, brandName }) {
+function summarize(findings) {
+  return findings.reduce(
+    (counts, finding) => {
+      counts.total += 1
+      counts[finding.severity] += 1
+      if (finding.type === 'needs_verification') counts.needsVerification += 1
+      return counts
+    },
+    { total: 0, high: 0, medium: 0, low: 0, needsVerification: 0 },
+  )
+}
+
+export async function runReview({ text, brandName, useAI = true }) {
   if (typeof text !== 'string') {
     throw new TypeError('text must be a string.')
   }
@@ -19,20 +32,24 @@ export async function runReview({ text, brandName }) {
   const ruleFindings = ruleChecker(sentences, rules, brandName)
   const claims = claimDetector(sentences)
   const factFindings = factMatcher(claims, facts)
-  const findings = buildFindings(ruleFindings, factFindings)
+  const deterministicFindings = buildFindings(ruleFindings, factFindings)
+  let findings = deterministicFindings
+  let aiStatus = useAI ? 'ok' : 'disabled'
 
-  // This is the seam for adding optional AI analysis after deterministic checks.
-  const summary = findings.reduce(
-    (counts, finding) => {
-      counts.total += 1
-      counts[finding.severity] += 1
-      if (finding.type === 'needs_verification') {
-        counts.needsVerification += 1
-      }
-      return counts
-    },
-    { total: 0, high: 0, medium: 0, low: 0, needsVerification: 0 },
-  )
+  if (useAI) {
+    try {
+      const aiFindings = await analyzeWithAI({
+        text,
+        rules,
+        facts,
+        deterministicFindings,
+      })
+      findings = buildFindings(deterministicFindings, aiFindings)
+    } catch {
+      aiStatus = 'unavailable'
+      findings = deterministicFindings
+    }
+  }
 
-  return { findings, summary }
+  return { findings, summary: summarize(findings), aiStatus }
 }

@@ -26,7 +26,7 @@ export default function buildFindings(ruleFindings, factFindings) {
     }
 
     seen.add(key)
-    findings.push(finding)
+    findings.push({ source: 'rules', ...finding })
   }
 
   findings.sort(

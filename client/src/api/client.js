@@ -45,10 +45,10 @@ async function request(path, options = {}, { onSlow, onSlowComplete } = {}) {
 }
 
 export const api = {
-  createReview: (inputText, brandName, requestOptions) =>
+  createReview: (inputText, brandName, useAI, requestOptions) =>
     request('/api/reviews', {
       method: 'POST',
-      body: JSON.stringify({ inputText, brandName }),
+      body: JSON.stringify({ inputText, brandName, useAI }),
     }, requestOptions),
   getReview: (id, requestOptions) =>
     request(`/api/reviews/${encodeURIComponent(id)}`, {}, requestOptions),

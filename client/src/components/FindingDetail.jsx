@@ -19,11 +19,20 @@ function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updati
     }
   }
 
+  async function copyRewrite() {
+    try {
+      onToast(await copyText(finding.suggestedRewrite ?? '') ? 'Rewrite copied' : 'Could not copy rewrite')
+    } catch {
+      onToast('Could not copy rewrite')
+    }
+  }
+
   return (
     <div className="detail-content">
       <div className="detail-pills">
         <Pill tone={finding.type === 'needs_verification' ? 'verification' : finding.severity}>{findingTypeLabel(finding, evidenceRecord)}</Pill>
         <Pill tone="neutral">{finding.status}</Pill>
+        {finding.source === 'ai' && <Pill tone="neutral">AI</Pill>}
       </div>
       <section className="detail-section">
         <h3><ShieldAlert size={16} /> Matched text in context</h3>
@@ -33,6 +42,12 @@ function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updati
           {review.inputText.slice(finding.endIndex, end)}
         </blockquote>
       </section>
+      {finding.source === 'ai' && finding.reason && (
+        <section className="detail-section">
+          <h3>AI rationale</h3>
+          <p className="detail-copy">{finding.reason}</p>
+        </section>
+      )}
       <section className="detail-section">
         <h3>Evidence</h3>
         {finding.type === 'needs_verification' ? (
@@ -56,6 +71,12 @@ function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updati
         <section className="detail-section">
           <div className="detail-heading-row"><h3>Suggested fix</h3><button className="button-secondary button-small" onClick={copySuggestion} type="button"><Copy size={14} /> Copy</button></div>
           <p className="suggestion-box">{finding.suggestion}</p>
+        </section>
+      )}
+      {finding.suggestedRewrite && (
+        <section className="detail-section">
+          <div className="detail-heading-row"><h3>Compliant rewrite</h3><button className="button-secondary button-small" onClick={copyRewrite} type="button"><Copy size={14} /> Copy</button></div>
+          <p className="suggestion-box">{finding.suggestedRewrite}</p>
         </section>
       )}
       <section className="detail-section">

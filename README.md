@@ -16,7 +16,7 @@ Copy-Item .env.example .env
 npm ci
 ```
 
-Set `MONGODB_URI` in `server/.env` to your MongoDB Atlas connection string. Then start the development server:
+Set `MONGODB_URI` in `server/.env` to your MongoDB Atlas connection string. To enable AI-assisted analysis, also set `AI_API_KEY` to a Google AI Studio API key and `AI_MODEL` to `gemini-3.8-flash`. AI is enabled by default in the review form; the app continues with deterministic-only findings if the AI request is unavailable or fails. Then start the development server:
 
 ```powershell
 npm run dev
@@ -64,9 +64,15 @@ The Vite development server prints the local URL (normally `http://localhost:517
 | `PORT` | `server/.env` | Express port; defaults to `5000` when omitted. |
 | `MONGODB_URI` | `server/.env` | MongoDB Atlas connection string. |
 | `CLIENT_URL` | `server/.env` | Comma-separated browser origins allowed by CORS. |
+| `AI_API_KEY` | `server/.env` | Secret Google Gemini API key. Keep it on the server only. |
+| `AI_MODEL` | `server/.env` | Gemini model identifier; use `gemini-3.8-flash`. |
 | `VITE_API_URL` | `client/.env` | Base URL used by the client to reach the API. |
 
 Copy the example env files and replace placeholders locally. Never commit `.env` files or real credentials.
+
+### Limitations and responsible AI
+
+Deterministic rules and approved facts remain the source of truth. AI findings are advisory, must cite a known Rule or Fact code (or be marked `needs_verification`), and are dropped if their evidence code or quoted text cannot be validated against the current review. A model can still misinterpret tone or produce a poor rewrite, so review all suggestions before publishing. Rewrites are drafts, not approved copy. AI failures and timeouts fall back to deterministic results and are shown as an unavailable notice. Review text is sent to Google Gemini only when AI analysis is enabled; disable the toggle for deterministic-only processing. The API caps review text at 10,000 characters and rate-limits review creation.
 
 ## Scripts
 

@@ -31,6 +31,7 @@ function ReviewPage({
   const navigate = useNavigate()
   const location = useLocation()
   const [inputText, setInputText] = useState('')
+  const [useAI, setUseAI] = useState(true)
   const [brandName, setBrandName] = useState('Nimbus Notes')
   const [review, setReview] = useState(null)
   const [pageState, setPageState] = useState(id ? 'loading' : 'empty')
@@ -184,7 +185,7 @@ function ReviewPage({
     setError('')
     setRetryAction(() => submitReview)
     try {
-      const result = await api.createReview(inputText, brandName.trim() || 'Nimbus Notes', {
+      const result = await api.createReview(inputText, brandName.trim() || 'Nimbus Notes', useAI, {
         onSlow: showSlowMessage,
         onSlowComplete: finishSlowRequest,
       })
@@ -301,6 +302,9 @@ function ReviewPage({
         </div>
       )}
       {evidenceError && <p className="inline-warning" role="status">Evidence details could not be loaded: {evidenceError}</p>}
+      {review?.aiStatus === 'unavailable' && (
+        <p className="inline-warning" role="status">AI unavailable, showing rule-based results only.</p>
+      )}
 
       {pageState === 'loading' && id && <LoadingState label={slowRequest ? 'Waking up the server, this can take up to a minute' : 'Loading saved review…'} />}
       {!review && !id && (
@@ -315,6 +319,8 @@ function ReviewPage({
             onLoadSample={() => setInputText(sampleText)}
             onReview={submitReview}
             onTextChange={setInputText}
+            useAI={useAI}
+            onUseAIChange={setUseAI}
           />
         </div>
       )}
@@ -398,7 +404,7 @@ function ReviewPage({
         <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setInputOpen(false) }}>
           <section aria-labelledby="new-review-title" aria-modal="true" className="new-review-modal" ref={inputModalRef} role="dialog">
             <div className="modal-header"><div><p className="eyebrow">New analysis</p><h2 id="new-review-title">Start a new review</h2></div><button aria-label="Close new review dialog" className="icon-button" onClick={() => setInputOpen(false)} type="button"><X size={18} /></button></div>
-            <InputPanel brandName={brandName} inputText={inputText} loading={submitting} onBrandNameChange={setBrandName} onClear={clearInput} onLoadSample={() => setInputText(sampleText)} onReview={submitReview} onTextChange={setInputText} />
+            <InputPanel brandName={brandName} inputText={inputText} loading={submitting} onBrandNameChange={setBrandName} onClear={clearInput} onLoadSample={() => setInputText(sampleText)} onReview={submitReview} onTextChange={setInputText} useAI={useAI} onUseAIChange={setUseAI} />
             {pageState === 'error' && <p className="inline-warning">{error}</p>}
             <button className="modal-close-link" onClick={() => setInputOpen(false)} type="button"><Plus size={14} /> Keep editing later</button>
           </section>

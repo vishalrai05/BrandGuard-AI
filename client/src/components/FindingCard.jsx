@@ -66,6 +66,7 @@ function FindingCard({ finding, evidenceRecord, onOpen, onMove, onCopy }) {
         <span>Severity</span><div aria-label={`${finding.severity} severity`} className="severity-track"><i style={{ width: `${progress}%` }} /></div>
       </div>
       <div className="finding-card-meta">
+        {finding.source === 'ai' && <Pill tone="neutral">AI</Pill>}
         {finding.evidence?.refCode && <Pill tone="neutral">{finding.evidence.refCode}</Pill>}
         {evidenceRecord?.category && <Pill tone="neutral">{evidenceRecord.category}</Pill>}
         {finding.status === 'accepted' && <Pill tone="success"><Check size={12} /> Accepted</Pill>}

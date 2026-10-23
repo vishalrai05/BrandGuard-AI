@@ -26,6 +26,7 @@ test('review engine detects planted issues and preserves evidence offsets', asyn
     const { findings, summary } = await runReview({
       text: demoText,
       brandName: 'Nimbus Notes',
+      useAI: false,
     })
     const ruleCodes = new Set(
       findings
@@ -153,6 +154,7 @@ test('review engine detects planted issues and preserves evidence offsets', asyn
     const clean = await runReview({
       text: 'Nimbus Notes helps teams organize their notes in one workspace.',
       brandName: 'Nimbus Notes',
+      useAI: false,
     })
     assert.deepEqual(clean.findings, [])
 
