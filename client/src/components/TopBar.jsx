@@ -22,8 +22,8 @@ function TopBar({ search, onSearch, onNewReview, onOpenMobile }) {
     <header className="topbar">
       <IconButton className="mobile-menu" label="Open navigation" onClick={onOpenMobile}><Menu size={20} /></IconButton>
       <div className="topbar-brand">
-        <p className="eyebrow">Welcome back</p>
-        <h1>BrandGuard AI</h1>
+        <p className="eyebrow">Copy review</p>
+        <h1>BrandGuard</h1>
       </div>
       <label className="search-box">
         <Search size={17} />

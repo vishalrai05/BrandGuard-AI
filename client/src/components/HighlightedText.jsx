@@ -5,8 +5,7 @@ import { findingTypeLabel } from '../utils/findingLabels.js'
 function segmentTone(findings) {
   if (findings.some((finding) => finding.type === 'needs_verification')) return 'verification'
   if (findings.some((finding) => finding.type === 'fact_mismatch')) return 'mismatch'
-  const severity = ['high', 'medium', 'low'].find((level) => findings.some((finding) => finding.severity === level))
-  return severity ?? 'low'
+  return 'rule'
 }
 
 function signalIcon(tone) {
@@ -62,6 +61,7 @@ function HighlightedText({ text, findings, selectedFindingId, onSelect, evidence
             const typeLabel = findingTypeLabel(primary, evidenceByCode[primary?.evidence?.refCode])
             const SignalIcon = signalIcon(tone)
             const showSignal = primary && primary.startIndex === segment.start
+            const findingNumber = Math.max(0, findings.findIndex((finding, index) => (finding._id ?? `finding-${index}`) === findingId)) + 1
             return (
               <mark
                 aria-label={`${active.map((finding) => findingTypeLabel(finding, evidenceByCode[finding.evidence?.refCode])).join(', ')} finding`}
@@ -81,6 +81,7 @@ function HighlightedText({ text, findings, selectedFindingId, onSelect, evidence
               >
                 {showSignal && (
                   <span className="highlight-signal">
+                    <sup aria-hidden="true" className="highlight-number">{findingNumber}</sup>
                     <SignalIcon aria-hidden="true" size={11} />
                     <span className="highlight-signal-label">{typeLabel}</span>
                   </span>

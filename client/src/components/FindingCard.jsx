@@ -20,7 +20,7 @@ function FindingCard({ finding, evidenceRecord, onOpen, onMove, onCopy }) {
   return (
     <article
       aria-label={`${typeLabel}: ${finding.matchedText}`}
-      className={`finding-board-card severity-${finding.severity} status-${finding.status} ${finding.type === 'needs_verification' ? 'finding-verification' : ''} ${isDragging ? 'finding-dragging' : ''}`}
+      className={`finding-board-card finding-${finding.type} severity-${finding.severity} status-${finding.status} ${finding.type === 'needs_verification' ? 'finding-verification' : ''} ${isDragging ? 'finding-dragging' : ''}`}
       onClick={onOpen}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) {
@@ -37,9 +37,10 @@ function FindingCard({ finding, evidenceRecord, onOpen, onMove, onCopy }) {
         <button aria-label="Drag finding" className="drag-handle" {...attributes} {...listeners} onClick={(event) => event.stopPropagation()} type="button">
           <GripVertical size={17} />
         </button>
-        <Pill tone={finding.type === 'needs_verification' ? 'verification' : finding.severity}>
-          {finding.type === 'needs_verification' ? 'Verify' : finding.severity}
+        <Pill tone={finding.type === 'needs_verification' ? 'verification' : finding.type === 'fact_mismatch' ? 'mismatch' : 'rule'}>
+          {finding.type === 'needs_verification' ? 'VERIFY' : finding.type === 'fact_mismatch' ? 'MISMATCH' : 'RULE'}
         </Pill>
+        {finding.evidence?.refCode && <Pill className="finding-code" tone="neutral">{finding.evidence.refCode}</Pill>}
         <details className="card-menu" onClick={(event) => event.stopPropagation()} onToggle={(event) => setMenuOpen(event.currentTarget.open)}>
           <summary aria-label="Finding actions" className="icon-button"><MoreHorizontal size={18} /></summary>
           {menuOpen && (
@@ -67,7 +68,6 @@ function FindingCard({ finding, evidenceRecord, onOpen, onMove, onCopy }) {
       </div>
       <div className="finding-card-meta">
         {finding.source === 'ai' && <Pill tone="neutral">AI</Pill>}
-        {finding.evidence?.refCode && <Pill tone="neutral">{finding.evidence.refCode}</Pill>}
         {evidenceRecord?.category && <Pill tone="neutral">{evidenceRecord.category}</Pill>}
         {finding.status === 'accepted' && <Pill tone="success"><Check size={12} /> Accepted</Pill>}
         {finding.status === 'dismissed' && <Pill tone="neutral"><Undo2 size={12} /> Dismissed</Pill>}

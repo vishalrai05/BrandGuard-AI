@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
-  BookOpenCheck, ClipboardCheck, FileText, LayoutDashboard, Settings2, Sparkles,
+  BookOpenCheck, ClipboardCheck, FileText, LayoutDashboard, Settings2,
 } from 'lucide-react'
 import { api } from '../api/client.js'
 import { useTheme } from '../hooks/useTheme.jsx'
@@ -54,7 +54,8 @@ function Shell({
     <div className="app-frame">
       <nav aria-label="Primary navigation" className="icon-rail">
         <Link aria-label="BrandGuard home" className="brand-mark" to="/">
-          <Sparkles size={21} strokeWidth={2.3} />
+          <span aria-hidden="true" className="brand-square" />
+          <span className="brand-wordmark">BRANDGUARD</span>
         </Link>
         <div className="rail-items">
           {navItems.map(({ label, to, icon: Icon, end }) => (
@@ -66,7 +67,11 @@ function Shell({
               title={label}
             >
               <Icon size={19} />
-              <span className="rail-mobile-label">{label}</span>
+              <span className="rail-mobile-label">
+                {label}
+                {to === '/rules' && <span className="rail-nav-count">{libraryCounts.rules}</span>}
+                {to === '/facts' && <span className="rail-nav-count">{libraryCounts.facts}</span>}
+              </span>
             </Link>
           ))}
           <button className="rail-link rail-theme-button" aria-label="Toggle light and dark theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Settings" type="button">

@@ -33,7 +33,7 @@ function HistoryPage() {
   return (
     <section>
       <div className="page-heading-row">
-        <div><p className="eyebrow">Workspace</p><h1>Review history</h1><p>Revisit submitted content and its evidence-linked findings.</p></div>
+        <div><p className="eyebrow">Reviews</p><h1>History</h1><p>Past reviews and their findings.</p></div>
         <label className="library-search"><Search size={15} /><input aria-label="Search review history" onChange={(event) => setQuery(event.target.value)} placeholder="Search by brand..." value={query} /></label>
       </div>
       {slowRequest && <p className="waking-message" role="status">Waking up the server, this can take up to a minute</p>}

@@ -5,8 +5,8 @@ function EmptyState() {
   return (
     <Card className="empty-state-card">
       <span className="empty-state-icon"><ShieldCheck size={22} /></span>
-      <h2>Ready for a brand check</h2>
-      <p>Paste marketing copy to check approved terminology, rules, and facts. Every finding links back to its evidence.</p>
+      <h2>Start a review</h2>
+      <p>Paste your copy to check it against 13 rules and 11 verified facts.</p>
     </Card>
   )
 }

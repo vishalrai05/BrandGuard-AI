@@ -36,8 +36,8 @@ function NavPanel({
     <aside className={`nav-panel ${collapsed ? 'nav-collapsed' : ''} ${mobileOpen ? 'nav-mobile-open' : ''}`}>
       <div className="nav-panel-head">
         <div>
-          <p className="eyebrow">Workspace</p>
-          <h2>Projects</h2>
+          <p className="eyebrow">Navigation</p>
+          <h2>Pages</h2>
         </div>
         <IconButton className="collapse-button" label={collapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={onToggleCollapsed}>
           {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}

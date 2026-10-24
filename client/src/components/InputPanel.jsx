@@ -1,4 +1,4 @@
-import { FileText, LoaderCircle, Play, RotateCcw, Sparkles } from 'lucide-react'
+import { FileText, LoaderCircle, Play, RotateCcw } from 'lucide-react'
 
 const MAX_CHARACTERS = 10_000
 
@@ -10,7 +10,7 @@ function InputPanel({
     <section className="input-panel">
       <div className="input-panel-header">
         <div><p className="eyebrow">Content review</p><h2>Check your copy before it ships</h2></div>
-        <button className="text-link-button" onClick={onLoadSample} type="button"><Sparkles size={14} /> Load sample</button>
+        <button className="text-link-button" onClick={onLoadSample} type="button">Load sample</button>
       </div>
       <label className="field-label" htmlFor="brand-name">Brand name</label>
       <input autoComplete="organization" className="text-input single-line" id="brand-name" maxLength={100} onChange={(event) => onBrandNameChange(event.target.value)} value={brandName} />

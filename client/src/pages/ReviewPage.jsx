@@ -285,14 +285,28 @@ function ReviewPage({
     <div className="review-page">
       <div className="review-heading">
         <div>
-          <p className="eyebrow">Brand governance workspace</p>
-          <h1>{review ? review.brandName : 'Keep every message on-brand'}</h1>
+          <p className="eyebrow">{review ? `REVIEW / ${new Date().toLocaleDateString('en-GB').replaceAll('/', '.')}` : 'REVIEW'}</p>
+          <h1>{review ? `${review.brandName} launch copy` : 'Review copy'}</h1>
           <p className="page-description">
-            {review ? 'Review findings, collaborate on fixes, and track decisions.' : 'Review copy against your approved rules and facts before it reaches customers.'}
+            {review ? 'Findings and evidence' : 'Check copy against approved rules and facts.'}
           </p>
         </div>
         {review && <div className="review-meta"><BookOpenCheck size={16} /> {review.findings.length} findings <span>·</span> Updated {new Date(review.updatedAt ?? review.createdAt).toLocaleDateString()}</div>}
       </div>
+
+      {review && (
+        <section aria-label="Review summary" className="review-overview">
+          <div className="review-stat-grid">
+            <div className="review-stat mismatch"><strong>{review.findings.filter((finding) => finding.type === 'fact_mismatch').length}</strong><span>MISMATCH</span></div>
+            <div className="review-stat rule"><strong>{review.findings.filter((finding) => finding.type === 'rule_violation').length}</strong><span>RULE</span></div>
+            <div className="review-stat verify"><strong>{review.findings.filter((finding) => finding.type === 'needs_verification').length}</strong><span>VERIFY</span></div>
+          </div>
+          <div className="compliance-stat">
+            <ScoreRing findings={review.findings} />
+            <span>COMPLIANCE / 100</span>
+          </div>
+        </section>
+      )}
 
       {slowRequest && <div className="waking-message" role="status" aria-live="polite">This is taking longer than usual. The server may be starting up or still processing your request.</div>}
       {error && !inputOpen && (
@@ -375,11 +389,6 @@ function ReviewPage({
                   text={review.inputText}
                 />
               </div>
-              <aside className="score-panel">
-                <ScoreRing findings={review.findings} />
-                <h2>Compliance score</h2>
-                <p>A directional score from severity-weighted review findings.</p>
-              </aside>
             </div>
           )}
         </>
