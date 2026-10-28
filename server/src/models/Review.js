@@ -24,6 +24,8 @@ const findingSchema = new mongoose.Schema({
     enum: ['open', 'accepted', 'dismissed'],
     default: 'open',
   },
+  statusChangedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  statusChangedAt: { type: Date },
 })
 
 const summarySchema = new mongoose.Schema(
@@ -54,6 +56,17 @@ const reviewSchema = new mongoose.Schema(
     summary: { type: summarySchema, default: () => ({}) },
     counts: { type: countsSchema, default: () => ({}) },
     aiStatus: { type: String, enum: ['ok', 'unavailable', 'disabled'], default: 'disabled' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    workflowStatus: {
+      type: String,
+      enum: ['draft', 'pending_approval', 'approved', 'changes_requested'],
+      default: 'draft',
+    },
+    submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    submittedAt: { type: Date },
+    decidedAt: { type: Date },
+    decisionNote: { type: String, maxlength: 500 },
   },
   { timestamps: true },
 )

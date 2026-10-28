@@ -4,6 +4,7 @@ import factsRouter from './routes/facts.js'
 import healthRouter from './routes/health.js'
 import reviewsRouter from './routes/reviews.js'
 import rulesRouter from './routes/rules.js'
+import authRouter from './routes/auth.js'
 
 const allowedOrigins = (process.env.CLIENT_URL ?? '')
   .split(',')
@@ -22,10 +23,12 @@ app.use(
     origin: (origin, callback) =>
       callback(null, !origin || allowedOrigins.includes(origin)),
     methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 )
 app.use(express.json())
 app.use('/api/health', healthRouter)
+app.use('/api/auth', authRouter)
 app.use('/api/rules', rulesRouter)
 app.use('/api/facts', factsRouter)
 app.use('/api/reviews', reviewsRouter)

@@ -2,6 +2,9 @@ import 'dotenv/config'
 import { connectDB } from './config/db.js'
 
 async function startServer() {
+  if (!process.env.JWT_SECRET?.trim()) {
+    throw new Error('JWT_SECRET is not set. Configure it in the deployment environment or server/.env.')
+  }
   if (!process.env.MONGODB_URI?.trim()) {
     throw new Error('MONGODB_URI is not set. Configure it in the deployment environment or server/.env.')
   }

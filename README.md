@@ -50,7 +50,7 @@ cp .env.example .env        # Windows PowerShell: Copy-Item .env.example .env
 npm ci
 ```
 
-Set `MONGODB_URI` in `server/.env` to your MongoDB Atlas connection string. To enable AI-assisted analysis, also set `AI_API_KEY` to a Google AI Studio API key and `AI_MODEL` to `gemini-3.8-flash`. AI is enabled by default in the review form; the app continues with deterministic-only findings if the AI request is unavailable or fails. Then start the development server:
+Set `MONGODB_URI` in `server/.env` to your MongoDB Atlas connection string and set `JWT_SECRET` to a long random value. `JWT_EXPIRES_IN` defaults to `7d`. To enable AI-assisted analysis, also set `AI_API_KEY` to a Google AI Studio API key and `AI_MODEL` to `gemini-3.8-flash`. AI is enabled by default in the review form; the app continues with deterministic-only findings if the AI request is unavailable or fails. Then start the development server:
 
 ```bash
 npm run dev
@@ -88,6 +88,23 @@ npm test
 
 The tests run the review engine on the demo document and check the AI validator with a mocked provider. No real AI calls are made.
 
+### Test authentication
+
+With the server running, register or log in to receive a bearer token, then use it with `/me`:
+
+```sh
+curl -X POST http://localhost:5000/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Reviewer","email":"reviewer@example.com","password":"change-this-password"}'
+
+curl -X POST http://localhost:5000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"reviewer@example.com","password":"change-this-password"}'
+
+curl http://localhost:5000/api/auth/me \
+  -H 'Authorization: Bearer <token-from-register-or-login>'
+```
+
 ### Client
 
 In a second terminal, from the project root:
@@ -104,13 +121,17 @@ The Vite development server prints the local URL (normally http://localhost:5173
 ## Environment variables
 
 | Variable | Location | Purpose |
-| --- | --- | --- |
-| `PORT` | server/.env | Express port; defaults to 5000 when omitted. |
-| `MONGODB_URI` | server/.env | MongoDB Atlas connection string. |
-| `CLIENT_URL` | server/.env | Comma-separated browser origins allowed by CORS. |
-| `AI_API_KEY` | server/.env | Secret Google Gemini API key. Keep it on the server only. |
-| `AI_MODEL` | server/.env | Gemini model identifier; use `gemini-3.8-flash`. |
-| `VITE_API_URL` | client/.env | Base URL used by the client to reach the API. |
+|---|---|---|
+| `PORT` | `server/.env` | Express port; defaults to `5000` when omitted. |
+| `MONGODB_URI` | `server/.env` | MongoDB Atlas connection string. |
+| `CLIENT_URL` | `server/.env` | Comma-separated browser origins allowed by CORS. |
+| `JWT_SECRET` | `server/.env` | Secret used to sign authentication tokens. Required at startup. |
+| `JWT_EXPIRES_IN` | `server/.env` | Token lifetime; defaults to `7d`. |
+| `SEED_DEMO_PASSWORD` | `server/.env` | Optional password for seeded demo users; local default is `NimbusDemo2026!`. Set a private value before seeding any shared environment. |
+| `ALLOW_SELF_APPROVAL` | `server/.env` | Whether a reviewer may approve their own review; defaults to `true`. |
+| `AI_API_KEY` | `server/.env` | Secret Google Gemini API key. Keep it on the server only. |
+| `AI_MODEL` | `server/.env` | Gemini model identifier; use `gemini-3.8-flash`. |
+| `VITE_API_URL` | `client/.env` | Base URL used by the client to reach the API. |
 
 Copy the example env files and replace placeholders locally. Never commit `.env` files or real credentials.
 
@@ -123,7 +144,7 @@ Copy the example env files and replace placeholders locally. Never commit `.env`
 | client | `npm run preview` | Preview the production client bundle locally. |
 | server | `npm run dev` | Start the API with nodemon. |
 | server | `npm start` | Start the API with Node.js. |
-| server | `npm test` | Run the review engine and mocked AI tests. |
+| server | `npm test` | Run the review engine, mocked AI, authentication, and workflow tests. |
 | server | `npm run seed -- --confirm` | Clear and replace the Rules and Facts collections with Nimbus Notes sample data. |
 
 ## Limitations and responsible AI
@@ -132,7 +153,7 @@ Deterministic rules and approved facts remain the source of truth. AI findings a
 
 ## Known limitations
 
-- No user accounts, approval roles or audit trail yet (planned for Round 3)
+- Approval submissions, decisions and review comments are not implemented yet
 - Review notes are drafts and are not saved
 - Plain text input only, English only
 - Fact matching uses keyword overlap, so unusual phrasing can be missed
@@ -145,6 +166,9 @@ Deterministic rules and approved facts remain the source of truth. AI findings a
 | Service | Variable | Value |
 | --- | --- | --- |
 | Render API | `MONGODB_URI` | MongoDB Atlas application database connection string (secret). |
+| Render API | `JWT_SECRET` | Generated secret used to sign authentication tokens. |
+| Render API | `JWT_EXPIRES_IN` | Token lifetime, defaults to `7d`. |
+| Render API | `ALLOW_SELF_APPROVAL` | Whether self-approval is allowed; defaults to `true`. |
 | Render API | `CLIENT_URL` | Comma-separated allowed origins, e.g. `https://your-app.vercel.app,http://localhost:5173`. |
 | Render API | `AI_API_KEY`, `AI_MODEL` | Gemini API key (secret) and model name `gemini-3.8-flash`. |
 | Render API | `PORT` | Set automatically by Render; the service listens on this value. |
@@ -160,7 +184,7 @@ Deterministic rules and approved facts remain the source of truth. AI findings a
 
 1. Connect the repository in Render and create a Web Service using the root `render.yaml` Blueprint, or configure the service manually.
 2. Set the service root directory to `server`, build command to `npm install`, and start command to `npm start`.
-3. Set `MONGODB_URI`, `AI_API_KEY`, `AI_MODEL` and `CLIENT_URL` (a comma-separated list including the final Vercel origin). Do not add credentials to `render.yaml`.
+3. Set `MONGODB_URI` to the Atlas URI and `CLIENT_URL` to a comma-separated list including the final Vercel origin. Render generates the secret JWT key from `render.yaml`; do not add credentials to the file.
 4. After deploy, verify the health URL: `https://your-brandguard-api.onrender.com/api/health`. It should return `{"status":"ok","db":"connected"}`.
 5. Optional: add an UptimeRobot monitor on `/api/health` (5-minute interval) so the free-tier service does not spin down.
 

@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { connectDB } from '../config/db.js'
 import Fact from '../models/Fact.js'
 import Rule from '../models/Rule.js'
+import User from '../models/User.js'
 
 export const rules = [
   {
@@ -290,10 +291,26 @@ export const facts = [
 export async function seed() {
   await connectDB()
 
+  if (process.env.NODE_ENV === 'production' && !process.env.SEED_DEMO_PASSWORD) {
+    throw new Error('SEED_DEMO_PASSWORD must be set before seeding in production.')
+  }
+  const demoPassword = process.env.SEED_DEMO_PASSWORD || 'NimbusDemo2026!'
   await Rule.deleteMany({})
   await Fact.deleteMany({})
   await Rule.insertMany(rules)
   await Fact.insertMany(facts)
 
-  console.log(`Seeded ${rules.length} rules and ${facts.length} facts.`)
+  for (const account of [
+    { name: 'Nimbus Reviewer', email: 'reviewer@nimbusnotes.demo', role: 'reviewer' },
+    { name: 'Nimbus Approver', email: 'approver@nimbusnotes.demo', role: 'approver' },
+  ]) {
+    let user = await User.findOne({ email: account.email }).select('+passwordHash')
+    if (!user) user = new User(account)
+    user.name = account.name
+    user.role = account.role
+    await user.setPassword(demoPassword)
+    await user.save()
+  }
+
+  console.log(`Seeded ${rules.length} rules, ${facts.length} facts, and 2 demo users.`)
 }
