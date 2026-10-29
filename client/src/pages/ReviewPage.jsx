@@ -13,6 +13,9 @@ import LoadingState from '../components/LoadingState.jsx'
 import ScoreRing from '../components/ScoreRing.jsx'
 import SummaryBar from '../components/SummaryBar.jsx'
 import Tabs from '../components/Tabs.jsx'
+import WorkflowStatusBadge from '../components/WorkflowStatusBadge.jsx'
+import WorkflowDecisionModal from '../components/WorkflowDecisionModal.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const sampleText =
   'NimbusNotes is the best place to collect ideas, organize projects, and keep important notes close at hand. Built for people who want a simple workspace without sacrificing useful tools, Nimbus Notes brings writing and collaboration together in one calm, searchable home. Our Plus plan is cheap at $8 per user each month. Teams can invite their guys to add notes, share context, and keep work moving. Nimbus Notes has 25 million registered accounts. It supports 42 integrations, so you can connect the tools you already use. More than 30 million active users trust us every day. Our smart workspace makes every team twice as creative. Shared pages help colleagues contribute in one place, while reminders eliminate missed deadlines for every user. Start with a personal notebook, then create shared workspaces as projects grow. You can open your notes on web, iOS, and Android, attach reference files, and search across your workspace when you need a detail again. Nimbus Notes is designed for thoughtful work: capture an idea, turn it into a useful plan, and give your team a clearer place to collaborate.'
@@ -30,6 +33,7 @@ function ReviewPage({
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
   const [inputText, setInputText] = useState('')
   const [useAI, setUseAI] = useState(true)
   const [brandName, setBrandName] = useState('Nimbus Notes')
@@ -50,6 +54,9 @@ function ReviewPage({
   const [slowRequest, setSlowRequest] = useState(false)
   const [inputOpen, setInputOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [workflowBusy, setWorkflowBusy] = useState(false)
+  const [workflowError, setWorkflowError] = useState('')
+  const [decisionModal, setDecisionModal] = useState(null)
   const slowRequestCount = useRef(0)
   const lastNewRequest = useRef(newReviewRequest)
   const inputModalRef = useRef(null)
@@ -189,8 +196,9 @@ function ReviewPage({
         onSlow: showSlowMessage,
         onSlowComplete: finishSlowRequest,
       })
-      setReview(result)
-      setBrandName(result.brandName)
+      const savedReview = await api.getReview(result._id)
+      setReview(savedReview)
+      setBrandName(savedReview.brandName)
       setFilter('all')
       setSelectedFindingId(null)
       setPageState('results')
@@ -216,18 +224,26 @@ function ReviewPage({
     setUpdatingFindingId(finding._id)
     setError('')
     try {
-      const updatedReview = await api.updateFinding(
+      await api.updateFinding(
         review._id,
         finding._id,
         status,
         { onSlow: showSlowMessage, onSlowComplete: finishSlowRequest },
       )
+      const updatedReview = await api.getReview(review._id)
       setReview(updatedReview)
       setToast(`Finding moved to ${status}`)
     } catch (requestError) {
-      setReview(previousReview)
-      setError(requestError.message)
-      setToast(`Could not update finding: ${requestError.message}`)
+      if (requestError.status === 409) {
+        try { setReview(await api.getReview(review._id)) } catch { setReview(previousReview) }
+        const message = 'Locked while pending approval. The latest review status has been loaded.'
+        setError(message)
+        setToast(message)
+      } else {
+        setReview(previousReview)
+        setError(requestError.message)
+        setToast(`Could not update finding: ${requestError.message}`)
+      }
     } finally {
       setUpdatingFindingId(null)
       setSlowRequest(slowRequestCount.current > 0)
@@ -268,6 +284,32 @@ function ReviewPage({
     if (id) navigate('/', { replace: true })
   }
 
+  async function runWorkflowAction(action, note) {
+    if (!review || workflowBusy) return
+    setWorkflowBusy(true)
+    setWorkflowError('')
+    try {
+      if (action === 'submit') await api.submitReview(review._id)
+      else if (action === 'approve') await api.approveReview(review._id, note)
+      else await api.requestChanges(review._id, note)
+      setReview(await api.getReview(review._id))
+      setDecisionModal(null)
+      setToast(action === 'submit' ? 'Review submitted for approval' : action === 'approve' ? 'Review approved' : 'Changes requested')
+    } catch (actionError) {
+      setWorkflowError(actionError.message || 'The workflow action could not be completed. Please try again.')
+      if (actionError.status === 409) {
+        try { setReview(await api.getReview(review._id)) } catch { /* keep the current view if refresh also fails */ }
+      }
+    } finally {
+      setWorkflowBusy(false)
+    }
+  }
+
+  function openDecisionModal(decision) {
+    setWorkflowError('')
+    setDecisionModal(decision)
+  }
+
   const visibleFindings = useMemo(() => (review?.findings ?? []).filter((finding) => {
     if (statusFilter !== 'all' && finding.status !== statusFilter) return false
     if (search && !`${finding.matchedText} ${finding.suggestion} ${finding.evidence?.refCode}`.toLowerCase().includes(search.toLowerCase())) return false
@@ -280,6 +322,9 @@ function ReviewPage({
   }), [categoryFilter, evidenceByCode, filter, review, search, statusFilter])
   const selectedFinding = review?.findings.find((finding) => finding._id === selectedFindingId)
   const categories = [...new Set([...rules, ...facts].map((item) => item.category).filter(Boolean))]
+  const workflowStatus = review?.workflowStatus ?? 'draft'
+  const workflowLocked = ['pending_approval', 'approved'].includes(workflowStatus)
+  const openHighFindings = review?.findings.filter((finding) => finding.severity === 'high' && finding.status === 'open').length ?? 0
 
   return (
     <div className="review-page">
@@ -290,9 +335,46 @@ function ReviewPage({
           <p className="page-description">
             {review ? 'Findings and evidence' : 'Check copy against approved rules and facts.'}
           </p>
+          {review && <div className="review-owner-line"><WorkflowStatusBadge status={workflowStatus} /><span>Created by {review.createdBy?.name ?? 'Legacy'}</span></div>}
         </div>
         {review && <div className="review-meta"><BookOpenCheck size={16} /> {review.findings.length} findings <span>·</span> Updated {new Date(review.updatedAt ?? review.createdAt).toLocaleDateString()}</div>}
       </div>
+
+      {review && (
+        <section aria-label="Approval workflow" className="workflow-panel">
+          <div className="workflow-panel-copy">
+            <p className="eyebrow">Approval workflow</p>
+            {workflowStatus === 'draft' || workflowStatus === 'changes_requested' ? (
+              <>
+                <h2>{workflowStatus === 'draft' ? 'Ready for review?' : 'Ready to resubmit?'}</h2>
+                <p>{openHighFindings ? `Resolve ${openHighFindings} high-severity ${openHighFindings === 1 ? 'finding' : 'findings'} first.` : 'Submit this review to an approver when the findings are ready.'}</p>
+              </>
+            ) : workflowStatus === 'pending_approval' ? (
+              <><h2>Pending approval</h2><p>{user.role === 'approver' ? `Submitted by ${review.submittedBy?.name ?? 'a reviewer'}${review.submittedAt ? ` on ${new Date(review.submittedAt).toLocaleString()}` : ''}.` : 'Waiting for an approver.'}</p></>
+            ) : (
+              <><h2>Approved</h2><p>Approved by {review.decidedBy?.name ?? 'an approver'}{review.decidedAt ? ` on ${new Date(review.decidedAt).toLocaleString()}` : ''}.</p></>
+            )}
+            {['approved', 'changes_requested'].includes(workflowStatus) && review.decisionNote && <p className="decision-summary"><strong>Decision note:</strong> {review.decisionNote}</p>}
+            {workflowStatus === 'changes_requested' && <p className="decision-summary">Changes requested by {review.decidedBy?.name ?? 'an approver'}{review.decidedAt ? ` on ${new Date(review.decidedAt).toLocaleString()}` : ''}.</p>}
+          </div>
+          <div className="workflow-panel-actions">
+            {(workflowStatus === 'draft' || workflowStatus === 'changes_requested') && (
+              <>
+                <button className="button-primary" disabled={workflowBusy || openHighFindings > 0} onClick={() => runWorkflowAction('submit')} title={openHighFindings > 0 ? `Resolve ${openHighFindings} high-severity findings first` : undefined} type="button">
+                  {workflowBusy ? 'Submitting…' : 'Submit for approval'}
+                </button>
+                {openHighFindings > 0 && <span className="workflow-helper">Resolve {openHighFindings} high-severity {openHighFindings === 1 ? 'finding' : 'findings'} first</span>}
+              </>
+            )}
+            {workflowStatus === 'pending_approval' && user.role === 'approver' && <>
+              <button className="button-success" disabled={workflowBusy} onClick={() => openDecisionModal('approve')} type="button">Approve</button>
+              <button className="button-secondary" disabled={workflowBusy} onClick={() => openDecisionModal('request-changes')} type="button">Request changes</button>
+            </>}
+            {workflowStatus === 'pending_approval' && user.role === 'reviewer' && <span className="waiting-approver">Waiting for an approver</span>}
+          </div>
+          {workflowError && <p className="workflow-error" role="alert">{workflowError}</p>}
+        </section>
+      )}
 
       {review && (
         <section aria-label="Review summary" className="review-overview">
@@ -363,6 +445,8 @@ function ReviewPage({
             </div>
           </div>
 
+          {workflowLocked && <p className="locked-explanation" role="status">Locked while pending approval. Finding status changes and board drag-and-drop are disabled.</p>}
+
           {view === 'board' ? (
             <FindingsBoard
               evidenceByCode={evidenceByCode}
@@ -376,6 +460,7 @@ function ReviewPage({
               sort={sort}
               statusFilter={statusFilter}
               categoryFilter={categoryFilter}
+              readOnly={workflowLocked}
             />
           ) : (
             <div className="text-view-layout">
@@ -400,6 +485,7 @@ function ReviewPage({
             evidenceRecord={evidenceByCode[selectedFinding.evidence?.refCode]}
             finding={selectedFinding}
             onStatusChange={updateFindingStatus}
+            readOnly={workflowLocked}
             onToast={setToast}
             onViewText={viewFindingInText}
             review={review}
@@ -419,6 +505,14 @@ function ReviewPage({
           </section>
         </div>
       )}
+
+      {decisionModal && <WorkflowDecisionModal
+        busy={workflowBusy}
+        decision={decisionModal}
+        error={workflowError}
+        onClose={() => { if (!workflowBusy) { setDecisionModal(null); setWorkflowError('') } }}
+        onConfirm={(note) => runWorkflowAction(decisionModal, note)}
+      />}
     </div>
   )
 }

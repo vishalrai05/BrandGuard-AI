@@ -4,7 +4,7 @@ import Pill from './Pill.jsx'
 import { copyText } from '../utils/copyText.js'
 import { findingTypeLabel } from '../utils/findingLabels.js'
 
-function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updating, onToast, onViewText }) {
+function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updating, onToast, onViewText, readOnly = false }) {
   // Notes intentionally stay in local drawer state as an unsaved draft.
   const [note, setNote] = useState('')
   if (!finding) return null
@@ -85,14 +85,15 @@ function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updati
       </section>
       <div className="drawer-actions">
         {finding.status !== 'open' ? (
-          <button className="button-secondary" disabled={updating} onClick={() => onStatusChange(finding, 'open')} type="button"><RotateCcw size={15} /> Reopen</button>
+          <button className="button-secondary" disabled={updating || readOnly} onClick={() => onStatusChange(finding, 'open')} type="button"><RotateCcw size={15} /> Undo</button>
         ) : (
           <>
-            <button className="button-success" disabled={updating} onClick={() => onStatusChange(finding, 'accepted')} type="button"><Check size={15} /> Accept</button>
-            <button className="button-secondary" disabled={updating} onClick={() => onStatusChange(finding, 'dismissed')} type="button"><X size={15} /> Dismiss</button>
+            <button className="button-success" disabled={updating || readOnly} onClick={() => onStatusChange(finding, 'accepted')} type="button"><Check size={15} /> Accept</button>
+            <button className="button-secondary" disabled={updating || readOnly} onClick={() => onStatusChange(finding, 'dismissed')} type="button"><X size={15} /> Dismiss</button>
           </>
         )}
       </div>
+      {readOnly && <p className="locked-explanation">Locked while pending approval.</p>}
     </div>
   )
 }

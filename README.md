@@ -88,6 +88,30 @@ npm test
 
 The tests run the review engine on the demo document and check the AI validator with a mocked provider. No real AI calls are made.
 
+### Testing the workflow
+
+In PowerShell, configure `server/.env` with `MONGODB_URI`, `JWT_SECRET`, and (optionally) `SEED_DEMO_PASSWORD`. The local-only demo password defaults to `NimbusDemo2026!` when `SEED_DEMO_PASSWORD` is unset; use a private value for any shared environment. Open the first terminal and start the API:
+
+```powershell
+Set-Location .\server
+npm run dev
+```
+
+In a second PowerShell terminal, seed the Nimbus Notes rules, facts, and demo accounts. This replaces the Rules and Facts collections; existing demo account passwords are preserved:
+
+```powershell
+Set-Location .\server
+npm run seed -- --confirm
+```
+
+Then run the end-to-end workflow check from that `server` directory:
+
+```powershell
+.\scripts\test-workflow.ps1
+```
+
+The script reads `SEED_DEMO_PASSWORD` from `server/.env` (or uses the documented local-only default). You can override the URL or password with `-Api` and `-DemoPassword`. It creates a uniquely named throwaway reviewer account and prints step results without printing tokens or passwords.
+
 ### Test authentication
 
 With the server running, register or log in to receive a bearer token, then use it with `/me`:
@@ -153,8 +177,6 @@ Deterministic rules and approved facts remain the source of truth. AI findings a
 
 ## Known limitations
 
-- Approval submissions, decisions and review comments are not implemented yet
-- Review notes are drafts and are not saved
 - Plain text input only, English only
 - Fact matching uses keyword overlap, so unusual phrasing can be missed
 - Free-tier hosting and AI quotas can occasionally slow a review or fall back to rule-based results

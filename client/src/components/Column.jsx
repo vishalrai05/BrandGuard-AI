@@ -9,8 +9,8 @@ const columnInfo = {
   dismissed: { label: 'Dismissed', tone: 'dismissed' },
 }
 
-function Column({ status, findings, evidenceByCode, onOpen, onMove, onCopy, onAdd }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `status:${status}`, data: { status } })
+function Column({ status, findings, evidenceByCode, onOpen, onMove, onCopy, onAdd, readOnly = false }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `status:${status}`, data: { status }, disabled: readOnly })
   const info = columnInfo[status]
 
   return (
@@ -18,7 +18,7 @@ function Column({ status, findings, evidenceByCode, onOpen, onMove, onCopy, onAd
       <header className="column-header">
         <div className={`column-dot ${info.tone}`} />
         <h2>{info.label}</h2><span className="column-count">{findings.length}</span>
-        <button aria-label={`Add new ${info.label.toLowerCase()} task`} className="icon-button column-add" onClick={onAdd} type="button"><Plus size={17} /></button>
+          <button aria-label={`Add new ${info.label.toLowerCase()} task`} className="icon-button column-add" disabled={readOnly} onClick={onAdd} type="button"><Plus size={17} /></button>
       </header>
       <SortableContext items={findings.map((finding) => finding._id)} strategy={verticalListSortingStrategy}>
         <div className="column-cards">
@@ -30,12 +30,13 @@ function Column({ status, findings, evidenceByCode, onOpen, onMove, onCopy, onAd
               onCopy={() => onCopy(finding)}
               onMove={onMove}
               onOpen={() => onOpen(finding)}
+              readOnly={readOnly}
             />
           ))}
           {findings.length === 0 && (
-            <div className="drop-placeholder"><span>Drag a finding here...</span></div>
+            <div className="drop-placeholder"><span>{readOnly ? 'Finding statuses are locked' : 'Drag a finding here...'}</span></div>
           )}
-          <button className="add-task-button" onClick={onAdd} type="button"><Plus size={15} /> Add new task</button>
+          <button className="add-task-button" disabled={readOnly} onClick={onAdd} type="button"><Plus size={15} /> Add new task</button>
         </div>
       </SortableContext>
     </section>

@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { Bell, Menu, Search } from 'lucide-react'
 import IconButton from './IconButton.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 function TopBar({ search, onSearch, onNewReview, onOpenMobile }) {
   const searchRef = useRef(null)
+  const { user, logout } = useAuth()
 
   useEffect(() => {
     function focusSearch(event) {
@@ -39,7 +41,11 @@ function TopBar({ search, onSearch, onNewReview, onOpenMobile }) {
       <div className="topbar-actions">
         <span className="topbar-date">{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
         <IconButton label="Notifications"><Bell size={18} /><i className="notification-dot" /></IconButton>
-        <span aria-label="User V" className="avatar">V</span>
+        <div className="auth-controls">
+          <span className="auth-user-name" title={user?.name}>{user?.name}</span>
+          <span className={`role-badge role-${user?.role}`}>{user?.role?.toUpperCase()}</span>
+          <button className="button-secondary button-small logout-button" onClick={logout} type="button">Log out</button>
+        </div>
         <button className="button-primary top-new-review" onClick={onNewReview} type="button"><span>+</span> New review</button>
       </div>
     </header>

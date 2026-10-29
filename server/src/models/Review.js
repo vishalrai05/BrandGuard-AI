@@ -26,6 +26,13 @@ const findingSchema = new mongoose.Schema({
   },
   statusChangedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   statusChangedAt: { type: Date },
+  comments: [{
+    author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    authorName: { type: String, required: true },
+    authorRole: { type: String, required: true, enum: ['reviewer', 'approver'] },
+    text: { type: String, required: true, trim: true, minlength: 1, maxlength: 1000 },
+    createdAt: { type: Date, default: Date.now },
+  }],
 })
 
 const summarySchema = new mongoose.Schema(

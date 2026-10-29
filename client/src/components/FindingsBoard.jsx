@@ -6,7 +6,7 @@ import { findingTypeLabel } from '../utils/findingLabels.js'
 
 const statuses = ['open', 'accepted', 'dismissed']
 
-function FindingsBoard({ findings, evidenceByCode, onOpen, onMove, onCopy, onAdd, statusFilter, query, filter, sort, categoryFilter }) {
+function FindingsBoard({ findings, evidenceByCode, onOpen, onMove, onCopy, onAdd, statusFilter, query, filter, sort, categoryFilter, readOnly = false }) {
   const [activeId, setActiveId] = useState(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -63,6 +63,7 @@ function FindingsBoard({ findings, evidenceByCode, onOpen, onMove, onCopy, onAdd
             onMove={onMove}
             onOpen={onOpen}
             status={status}
+            readOnly={readOnly}
           />
         ))}
       </div>
