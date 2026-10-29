@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Check, GripVertical, MoreHorizontal, Undo2 } from 'lucide-react'
+import { Check, GripVertical, MessageSquare, MoreHorizontal, Undo2 } from 'lucide-react'
 import { findingTypeLabel } from '../utils/findingLabels.js'
 import Pill from './Pill.jsx'
 
@@ -72,6 +72,7 @@ function FindingCard({ finding, evidenceRecord, onOpen, onMove, onCopy, readOnly
         {evidenceRecord?.category && <Pill tone="neutral">{evidenceRecord.category}</Pill>}
         {finding.status === 'accepted' && <Pill tone="success"><Check size={12} /> Accepted</Pill>}
         {finding.status === 'dismissed' && <Pill tone="neutral"><Undo2 size={12} /> Dismissed</Pill>}
+        <Pill className="comment-count" tone="neutral" title={`${finding.comments?.length ?? 0} comments`}><MessageSquare size={11} /> {finding.comments?.length ?? 0}</Pill>
       </div>
     </article>
   )

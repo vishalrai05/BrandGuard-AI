@@ -1,12 +1,10 @@
-import { useState } from 'react'
 import { Check, Copy, ExternalLink, RotateCcw, ShieldAlert, X, ScanText } from 'lucide-react'
 import Pill from './Pill.jsx'
+import CommentsThread from './CommentsThread.jsx'
 import { copyText } from '../utils/copyText.js'
 import { findingTypeLabel } from '../utils/findingLabels.js'
 
-function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updating, onToast, onViewText, readOnly = false }) {
-  // Notes intentionally stay in local drawer state as an unsaved draft.
-  const [note, setNote] = useState('')
+function FindingDetail({ finding, review, evidenceRecord, onStatusChange, onAddComment, updating, onToast, onViewText, readOnly = false }) {
   if (!finding) return null
   const start = Math.max(0, finding.startIndex - 90)
   const end = Math.min(review.inputText.length, finding.endIndex + 90)
@@ -79,10 +77,7 @@ function FindingDetail({ finding, review, evidenceRecord, onStatusChange, updati
           <p className="suggestion-box">{finding.suggestedRewrite}</p>
         </section>
       )}
-      <section className="detail-section">
-        <label className="field-label" htmlFor={`note-${finding._id}`}>Review note <span>Draft only</span></label>
-        <textarea className="text-input note-input" id={`note-${finding._id}`} onChange={(event) => setNote(event.target.value)} placeholder="Add a private note for this review..." value={note} />
-      </section>
+      <CommentsThread finding={finding} locked={readOnly} onAddComment={onAddComment} />
       <div className="drawer-actions">
         {finding.status !== 'open' ? (
           <button className="button-secondary" disabled={updating || readOnly} onClick={() => onStatusChange(finding, 'open')} type="button"><RotateCcw size={15} /> Undo</button>

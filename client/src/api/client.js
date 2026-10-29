@@ -27,6 +27,15 @@ function expireSession() {
   window.dispatchEvent(new CustomEvent('brandguard:session-expired'))
 }
 
+function friendlyErrorMessage(status, payload, authEntry) {
+  const serverMessage = typeof payload?.error === 'string' ? payload.error : ''
+  if (status === 401 && !authEntry) return 'Your session expired. Please sign in again.'
+  if (status === 403) return 'You do not have permission to perform this action.'
+  if (status === 409 && /locked/i.test(serverMessage)) return 'This review is locked while awaiting approval.'
+  if (status >= 500) return 'The server could not complete that request. Please try again.'
+  return serverMessage || `Request failed with HTTP ${status}.`
+}
+
 async function request(path, options = {}, { onSlow, onSlowComplete } = {}) {
   if (!baseUrl) {
     throw new Error('VITE_API_URL is not configured. Set it to your deployed API URL.')
@@ -62,8 +71,9 @@ async function request(path, options = {}, { onSlow, onSlowComplete } = {}) {
       : null
 
     if (!response.ok) {
-      if (response.status === 401 && !isAuthEntry(path)) expireSession()
-      const error = new Error(payload?.error ?? `Request failed with HTTP ${response.status}.`)
+      const authEntry = isAuthEntry(path)
+      if (response.status === 401 && !authEntry) expireSession()
+      const error = new Error(friendlyErrorMessage(response.status, payload, authEntry))
       error.status = response.status
       throw error
     }
@@ -90,6 +100,16 @@ export const api = {
     }, requestOptions),
   getReview: (id, requestOptions) =>
     request(`/api/reviews/${encodeURIComponent(id)}`, {}, requestOptions),
+  addFindingComment: (reviewId, findingId, text, requestOptions) => request(
+    `/api/reviews/${encodeURIComponent(reviewId)}/findings/${encodeURIComponent(findingId)}/comments`,
+    { method: 'POST', body: JSON.stringify({ text }) },
+    requestOptions,
+  ),
+  getReviewAudit: (reviewId, page = 1, limit = 25, requestOptions) => request(
+    `/api/reviews/${encodeURIComponent(reviewId)}/audit?page=${encodeURIComponent(page)}&limit=${encodeURIComponent(limit)}`,
+    {},
+    requestOptions,
+  ),
   getReviews: (requestOptions) => request('/api/reviews', {}, requestOptions),
   getRules: (requestOptions) => request('/api/rules', {}, requestOptions),
   getFacts: (requestOptions) => request('/api/facts', {}, requestOptions),

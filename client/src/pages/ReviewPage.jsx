@@ -15,12 +15,15 @@ import SummaryBar from '../components/SummaryBar.jsx'
 import Tabs from '../components/Tabs.jsx'
 import WorkflowStatusBadge from '../components/WorkflowStatusBadge.jsx'
 import WorkflowDecisionModal from '../components/WorkflowDecisionModal.jsx'
+import WorkflowSummary from '../components/WorkflowSummary.jsx'
+import AuditTrail from '../components/AuditTrail.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
 const sampleText =
   'NimbusNotes is the best place to collect ideas, organize projects, and keep important notes close at hand. Built for people who want a simple workspace without sacrificing useful tools, Nimbus Notes brings writing and collaboration together in one calm, searchable home. Our Plus plan is cheap at $8 per user each month. Teams can invite their guys to add notes, share context, and keep work moving. Nimbus Notes has 25 million registered accounts. It supports 42 integrations, so you can connect the tools you already use. More than 30 million active users trust us every day. Our smart workspace makes every team twice as creative. Shared pages help colleagues contribute in one place, while reminders eliminate missed deadlines for every user. Start with a personal notebook, then create shared workspaces as projects grow. You can open your notes on web, iOS, and Android, attach reference files, and search across your workspace when you need a detail again. Nimbus Notes is designed for thoughtful work: capture an idea, turn it into a useful plan, and give your team a clearer place to collaborate.'
 
 const emptySummary = { total: 0, high: 0, medium: 0, low: 0, needsVerification: 0 }
+const AUDIT_PAGE_SIZE = 25
 
 function ReviewPage({
   search = '',
@@ -57,6 +60,14 @@ function ReviewPage({
   const [workflowBusy, setWorkflowBusy] = useState(false)
   const [workflowError, setWorkflowError] = useState('')
   const [decisionModal, setDecisionModal] = useState(null)
+  const [auditEntries, setAuditEntries] = useState([])
+  const [auditPage, setAuditPage] = useState(0)
+  const [auditHasMore, setAuditHasMore] = useState(false)
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditLoadingMore, setAuditLoadingMore] = useState(false)
+  const [auditError, setAuditError] = useState('')
+  const [auditReloadKey, setAuditReloadKey] = useState(0)
+  const auditRequestId = useRef(0)
   const slowRequestCount = useRef(0)
   const lastNewRequest = useRef(newReviewRequest)
   const inputModalRef = useRef(null)
@@ -186,6 +197,54 @@ function ReviewPage({
 
   useEffect(() => onSummaryChange(summary), [onSummaryChange, summary])
 
+  useEffect(() => {
+    if (view !== 'audit' || !review) return undefined
+    const requestId = ++auditRequestId.current
+    setAuditLoading(true)
+    setAuditError('')
+    setAuditEntries([])
+    setAuditPage(0)
+    setAuditHasMore(false)
+    setAuditLoadingMore(false)
+    api.getReviewAudit(review._id, 1, AUDIT_PAGE_SIZE)
+      .then((entries) => {
+        if (requestId !== auditRequestId.current) return
+        setAuditEntries(entries)
+        setAuditPage(1)
+        setAuditHasMore(entries.length === AUDIT_PAGE_SIZE)
+      })
+      .catch((requestError) => {
+        if (requestId === auditRequestId.current) setAuditError(requestError.message || 'The audit trail could not be loaded.')
+      })
+      .finally(() => {
+        if (requestId === auditRequestId.current) setAuditLoading(false)
+      })
+    return () => { auditRequestId.current += 1 }
+  }, [auditReloadKey, review?._id, view])
+
+  async function loadMoreAudit() {
+    if (!review || auditLoadingMore || !auditHasMore) return
+    const requestId = auditRequestId.current
+    const nextPage = auditPage + 1
+    setAuditLoadingMore(true)
+    setAuditError('')
+    try {
+      const entries = await api.getReviewAudit(review._id, nextPage, AUDIT_PAGE_SIZE)
+      if (requestId !== auditRequestId.current) return
+      setAuditEntries((current) => [...current, ...entries])
+      setAuditPage(nextPage)
+      setAuditHasMore(entries.length === AUDIT_PAGE_SIZE)
+    } catch (requestError) {
+      if (requestId === auditRequestId.current) setAuditError(requestError.message || 'More audit entries could not be loaded.')
+    } finally {
+      if (requestId === auditRequestId.current) setAuditLoadingMore(false)
+    }
+  }
+
+  function refreshAudit() {
+    setAuditReloadKey((current) => current + 1)
+  }
+
   async function submitReview() {
     if (!review) setPageState('loading')
     setSubmitting(true)
@@ -198,6 +257,7 @@ function ReviewPage({
       })
       const savedReview = await api.getReview(result._id)
       setReview(savedReview)
+      refreshAudit()
       setBrandName(savedReview.brandName)
       setFilter('all')
       setSelectedFindingId(null)
@@ -232,10 +292,12 @@ function ReviewPage({
       )
       const updatedReview = await api.getReview(review._id)
       setReview(updatedReview)
+      refreshAudit()
       setToast(`Finding moved to ${status}`)
     } catch (requestError) {
       if (requestError.status === 409) {
         try { setReview(await api.getReview(review._id)) } catch { setReview(previousReview) }
+        refreshAudit()
         const message = 'Locked while pending approval. The latest review status has been loaded.'
         setError(message)
         setToast(message)
@@ -274,6 +336,23 @@ function ReviewPage({
     }
   }
 
+  async function addFindingComment(findingId, text) {
+    const comment = await api.addFindingComment(review._id, findingId, text)
+    const optimisticReview = {
+      ...review,
+      findings: review.findings.map((finding) => finding._id === findingId
+        ? { ...finding, comments: [...(finding.comments ?? []), comment] }
+        : finding),
+    }
+    setReview(optimisticReview)
+    refreshAudit()
+    try {
+      setReview(await api.getReview(review._id))
+    } catch {
+      setToast('Comment posted. The latest review could not be refreshed.')
+    }
+  }
+
   function clearInput() {
     setInputText('')
     setReview(null)
@@ -293,12 +372,14 @@ function ReviewPage({
       else if (action === 'approve') await api.approveReview(review._id, note)
       else await api.requestChanges(review._id, note)
       setReview(await api.getReview(review._id))
+      refreshAudit()
       setDecisionModal(null)
       setToast(action === 'submit' ? 'Review submitted for approval' : action === 'approve' ? 'Review approved' : 'Changes requested')
     } catch (actionError) {
       setWorkflowError(actionError.message || 'The workflow action could not be completed. Please try again.')
       if (actionError.status === 409) {
         try { setReview(await api.getReview(review._id)) } catch { /* keep the current view if refresh also fails */ }
+        refreshAudit()
       }
     } finally {
       setWorkflowBusy(false)
@@ -339,6 +420,10 @@ function ReviewPage({
         </div>
         {review && <div className="review-meta"><BookOpenCheck size={16} /> {review.findings.length} findings <span>·</span> Updated {new Date(review.updatedAt ?? review.createdAt).toLocaleDateString()}</div>}
       </div>
+
+      {review && (
+        <WorkflowSummary review={review} status={workflowStatus} />
+      )}
 
       {review && (
         <section aria-label="Approval workflow" className="workflow-panel">
@@ -424,8 +509,8 @@ function ReviewPage({
       {review && pageState === 'results' && (
         <>
           <div className="view-toolbar">
-            <Tabs active={view} items={[{ value: 'board', label: 'Board view' }, { value: 'text', label: 'Text view' }]} onChange={setView} />
-            <div className="toolbar-controls">
+            <Tabs active={view} items={[{ value: 'board', label: 'Board view' }, { value: 'text', label: 'Text view' }, { value: 'audit', label: 'Audit trail' }]} onChange={setView} />
+            {view !== 'audit' && <div className="toolbar-controls">
               <label className="select-control"><ListFilter size={15} /><span>Filter</span>
                 <select aria-label="Filter findings" onChange={(event) => setFilter(event.target.value)} value={filter}>
                   <option value="all">All findings</option><option value="high">High severity</option><option value="medium">Medium severity</option><option value="low">Low severity</option>
@@ -442,12 +527,23 @@ function ReviewPage({
                   <option value="all">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
               </label>
-            </div>
+            </div>}
           </div>
 
-          {workflowLocked && <p className="locked-explanation" role="status">Locked while pending approval. Finding status changes and board drag-and-drop are disabled.</p>}
+          {workflowLocked && view !== 'audit' && <p className="locked-explanation" role="status">Locked while pending approval. Finding status changes and board drag-and-drop are disabled.</p>}
 
-          {view === 'board' ? (
+          {view === 'audit' ? (
+            <AuditTrail
+              entries={auditEntries}
+              error={auditError}
+              hasMore={auditHasMore}
+              loading={auditLoading}
+              loadingMore={auditLoadingMore}
+              onLoadMore={loadMoreAudit}
+              onRefresh={refreshAudit}
+              onRetry={refreshAudit}
+            />
+          ) : view === 'board' ? (
             <FindingsBoard
               evidenceByCode={evidenceByCode}
               findings={review.findings}
@@ -485,6 +581,7 @@ function ReviewPage({
             evidenceRecord={evidenceByCode[selectedFinding.evidence?.refCode]}
             finding={selectedFinding}
             onStatusChange={updateFindingStatus}
+            onAddComment={addFindingComment}
             readOnly={workflowLocked}
             onToast={setToast}
             onViewText={viewFindingInText}

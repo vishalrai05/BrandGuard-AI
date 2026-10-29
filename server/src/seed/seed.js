@@ -288,26 +288,36 @@ export const facts = [
   },
 ]
 
-export async function seed() {
-  await connectDB({ quiet: true })
-
+export async function seed({ connect = connectDB, ruleModel = Rule, factModel = Fact, userModel = User, log = console.log } = {}) {
   if (process.env.NODE_ENV === 'production' && !process.env.SEED_DEMO_PASSWORD) {
     throw new Error('SEED_DEMO_PASSWORD must be set before seeding in production.')
   }
+  await connect({ quiet: true })
+
   const demoPassword = process.env.SEED_DEMO_PASSWORD || 'NimbusDemo2026!'
-  await Rule.deleteMany({})
-  await Fact.deleteMany({})
-  await Rule.insertMany(rules)
-  await Fact.insertMany(facts)
+  await ruleModel.bulkWrite(rules.map((rule) => ({
+    updateOne: {
+      filter: { code: rule.code },
+      update: { $setOnInsert: rule },
+      upsert: true,
+    },
+  })))
+  await factModel.bulkWrite(facts.map((fact) => ({
+    updateOne: {
+      filter: { code: fact.code },
+      update: { $setOnInsert: fact },
+      upsert: true,
+    },
+  })))
 
   const demoUsers = []
   for (const account of [
     { name: 'Nimbus Reviewer', email: 'reviewer@nimbusnotes.demo', role: 'reviewer' },
     { name: 'Nimbus Approver', email: 'approver@nimbusnotes.demo', role: 'approver' },
   ]) {
-    let user = await User.findOne({ email: account.email })
+    let user = await userModel.findOne({ email: account.email })
     if (!user) {
-      user = new User(account)
+      user = new userModel(account)
       await user.setPassword(demoPassword)
     } else {
       user.name = account.name
@@ -317,5 +327,5 @@ export async function seed() {
     demoUsers.push({ email: user.email, role: user.role })
   }
 
-  for (const user of demoUsers) console.log(`${user.email} ${user.role}`)
+  for (const user of demoUsers) log(`${user.email} ${user.role}`)
 }

@@ -42,17 +42,17 @@ Requirements: Node.js 20.20.2 (or a compatible 20.x release) and npm. A MongoDB 
 
 ### Server
 
-In one terminal, from the project root:
+In PowerShell, from the project root:
 
-```bash
-cd server
-cp .env.example .env        # Windows PowerShell: Copy-Item .env.example .env
+```powershell
+Set-Location .\server
+Copy-Item .env.example .env
 npm ci
 ```
 
 Set `MONGODB_URI` in `server/.env` to your MongoDB Atlas connection string and set `JWT_SECRET` to a long random value. `JWT_EXPIRES_IN` defaults to `7d`. To enable AI-assisted analysis, also set `AI_API_KEY` to a Google AI Studio API key and `AI_MODEL` to `gemini-3.8-flash`. AI is enabled by default in the review form; the app continues with deterministic-only findings if the AI request is unavailable or fails. Then start the development server:
 
-```bash
+```powershell
 npm run dev
 ```
 
@@ -62,27 +62,26 @@ For a production-style start, use `npm start`.
 
 With `MONGODB_URI` set in `server/.env`, from the `server` directory run:
 
-```bash
+```powershell
 npm run seed -- --confirm
 ```
 
-The seed command clears and replaces the Rules and Facts collections with fictional Nimbus Notes data. It requires `--confirm` every time to prevent accidental database wipes.
+The seed command adds missing fictional Nimbus Notes Rules and Facts by their unique codes and creates missing demo users. It does not delete or overwrite existing Rules/Facts or reset demo passwords, so rerunning it is idempotent. `--confirm` is still required to make the intent explicit.
 
 ### Test the data endpoints
 
-Start the server with `npm run dev`, then use a second terminal:
+Start the server with `npm run dev`, then use a second PowerShell terminal:
 
-```bash
-curl http://localhost:5000/api/rules
-curl "http://localhost:5000/api/rules?category=claims"
-curl http://localhost:5000/api/facts
-# PowerShell: Invoke-RestMethod http://localhost:5000/api/rules
+```powershell
+Invoke-RestMethod -Uri "http://localhost:5000/api/rules"
+Invoke-RestMethod -Uri "http://localhost:5000/api/rules?category=claims"
+Invoke-RestMethod -Uri "http://localhost:5000/api/facts"
 ```
 
 ### Run the tests
 
-```bash
-cd server
+```powershell
+Set-Location .\server
 npm test
 ```
 
@@ -97,7 +96,7 @@ Set-Location .\server
 npm run dev
 ```
 
-In a second PowerShell terminal, seed the Nimbus Notes rules, facts, and demo accounts. This replaces the Rules and Facts collections; existing demo account passwords are preserved:
+In a second PowerShell terminal, add any missing Nimbus Notes rules, facts, and demo accounts. Existing records and demo account passwords are preserved:
 
 ```powershell
 Set-Location .\server
@@ -112,30 +111,21 @@ Then run the end-to-end workflow check from that `server` directory:
 
 The script reads `SEED_DEMO_PASSWORD` from `server/.env` (or uses the documented local-only default). You can override the URL or password with `-Api` and `-DemoPassword`. It creates a uniquely named throwaway reviewer account and prints step results without printing tokens or passwords.
 
-### Test authentication
+### Demo accounts and how to test approvals
 
-With the server running, register or log in to receive a bearer token, then use it with `/me`:
+Seed the local database with `npm run seed -- --confirm` from `server`. The demo users are `reviewer@nimbusnotes.demo` and `approver@nimbusnotes.demo`; both use the `SEED_DEMO_PASSWORD` value configured in `server/.env`, or the documented local-only fallback when it is unset. Registration always creates a reviewer; the approver account is created by the seed command.
 
-```sh
-curl -X POST http://localhost:5000/api/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Reviewer","email":"reviewer@example.com","password":"change-this-password"}'
+For a two-user demo, sign in as the reviewer in one browser window, create a review, resolve its open high-severity findings, add a comment, and submit it. In a separate private window, sign in as the approver and open that review from History. The approver can comment while it is locked, request changes with a required note, or approve it. To demonstrate the full cycle, request changes first; return to the reviewer window, update a finding and resubmit; then approve the resubmitted review in the approver window. The Audit trail tab shows both users' actions.
 
-curl -X POST http://localhost:5000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"reviewer@example.com","password":"change-this-password"}'
-
-curl http://localhost:5000/api/auth/me \
-  -H 'Authorization: Bearer <token-from-register-or-login>'
-```
+For a production database, set the Render `SEED_DEMO_PASSWORD` secret before creating the demo users. Use the Render service Shell or a trusted one-off job with the production environment configured, verify that `MONGODB_URI` points to the intended database, then run `npm run seed -- --confirm` from the service root (`server`). The seed operation only inserts sample Rules, Facts, or demo users that are missing; it preserves existing records and passwords, and can be safely repeated. Never put production credentials in a command, repository, or shared log.
 
 ### Client
 
-In a second terminal, from the project root:
+In a second PowerShell terminal, from the project root:
 
-```bash
-cd client
-cp .env.example .env        # Windows PowerShell: Copy-Item .env.example .env
+```powershell
+Set-Location .\client
+Copy-Item .env.example .env
 npm ci
 npm run dev
 ```
@@ -151,7 +141,7 @@ The Vite development server prints the local URL (normally http://localhost:5173
 | `CLIENT_URL` | `server/.env` | Comma-separated browser origins allowed by CORS. |
 | `JWT_SECRET` | `server/.env` | Secret used to sign authentication tokens. Required at startup. |
 | `JWT_EXPIRES_IN` | `server/.env` | Token lifetime; defaults to `7d`. |
-| `SEED_DEMO_PASSWORD` | `server/.env` | Optional password for seeded demo users; local default is `NimbusDemo2026!`. Set a private value before seeding any shared environment. |
+| `SEED_DEMO_PASSWORD` | `server/.env` | Seeded demo-account password. Local-only fallback is `NimbusDemo2026!`; set a private secret before seeding any shared or production environment. Existing demo passwords are never reset by later seed runs. |
 | `ALLOW_SELF_APPROVAL` | `server/.env` | Whether a reviewer may approve their own review; defaults to `true`. |
 | `AI_API_KEY` | `server/.env` | Secret Google Gemini API key. Keep it on the server only. |
 | `AI_MODEL` | `server/.env` | Gemini model identifier; use `gemini-3.8-flash`. |
@@ -169,7 +159,7 @@ Copy the example env files and replace placeholders locally. Never commit `.env`
 | server | `npm run dev` | Start the API with nodemon. |
 | server | `npm start` | Start the API with Node.js. |
 | server | `npm test` | Run the review engine, mocked AI, authentication, and workflow tests. |
-| server | `npm run seed -- --confirm` | Clear and replace the Rules and Facts collections with Nimbus Notes sample data. |
+| server | `npm run seed -- --confirm` | Add missing Nimbus Notes sample Rules, Facts, and demo accounts without deleting existing records. |
 
 ## Limitations and responsible AI
 
@@ -187,26 +177,30 @@ Deterministic rules and approved facts remain the source of truth. AI findings a
 
 | Service | Variable | Value |
 | --- | --- | --- |
-| Render API | `MONGODB_URI` | MongoDB Atlas application database connection string (secret). |
-| Render API | `JWT_SECRET` | Generated secret used to sign authentication tokens. |
-| Render API | `JWT_EXPIRES_IN` | Token lifetime, defaults to `7d`. |
-| Render API | `ALLOW_SELF_APPROVAL` | Whether self-approval is allowed; defaults to `true`. |
-| Render API | `CLIENT_URL` | Comma-separated allowed origins, e.g. `https://your-app.vercel.app,http://localhost:5173`. |
-| Render API | `AI_API_KEY`, `AI_MODEL` | Gemini API key (secret) and model name `gemini-3.8-flash`. |
-| Render API | `PORT` | Set automatically by Render; the service listens on this value. |
-| Vercel client | `VITE_API_URL` | Render API origin, e.g. `https://your-brandguard-api.onrender.com` (no `/api` suffix). |
+| Render API | `MONGODB_URI` | **Secret.** MongoDB Atlas application database connection string. |
+| Render API | `JWT_SECRET` | **Secret.** Generated by the Render blueprint and used to sign tokens. |
+| Render API | `JWT_EXPIRES_IN` | Token lifetime; blueprint default is `7d`. |
+| Render API | `SEED_DEMO_PASSWORD` | **Secret.** Required for production seeding; used only when creating demo users and never resets existing passwords. |
+| Render API | `ALLOW_SELF_APPROVAL` | `false` in the blueprint; set to `true` only if policy permits submitter decisions. |
+| Render API | `AI_API_KEY` | **Secret, optional.** Gemini API key; omit to use deterministic review only. |
+| Render API | `AI_MODEL` | Gemini model name, default `gemini-3.8-flash`. |
+| Render API | `CLIENT_URL` | Comma-separated allowed origins. Set the exact deployed Vercel origin; the CORS middleware reads this environment variable. |
+| Render API | `PORT` | Supplied automatically by Render; do not set manually. |
+| Render API | `NODE_ENV` | `production`, set by the Render blueprint (enables production seed safeguards). |
+| Render API | `NODE_VERSION` | Set to `20.20.2` by the Render blueprint. |
+| Vercel client | `VITE_API_URL` | API origin, e.g. `https://your-brandguard-api.onrender.com` (no `/api` suffix). Public build-time URL, not a secret. |
 
 ### Deploy MongoDB Atlas
 
 1. Create or select an Atlas cluster and a least-privilege database user.
 2. Configure Network Access for the Render service. Render's free tier has no fixed outbound IP addresses, so the demo deployment allows all addresses; restrict this (for example with static outbound IPs on a plan that provides them) for any production use.
-3. Copy the Atlas connection string and keep it secret. Seed the intended database from a trusted local terminal only when ready: from `server`, set `MONGODB_URI` and run `npm run seed -- --confirm`. This replaces the Rules and Facts collections.
+3. Copy the Atlas connection string and keep it secret. Seed the intended database from the Render service Shell or a trusted one-off job only when ready. Set `SEED_DEMO_PASSWORD` as a Render secret, verify `MONGODB_URI`, and run `npm run seed -- --confirm` from `server`. The seed is additive and idempotent: it inserts missing sample Rules/Facts and demo users by code/email, preserves existing records and passwords, and does not clear collections.
 
 ### Deploy the backend to Render
 
 1. Connect the repository in Render and create a Web Service using the root `render.yaml` Blueprint, or configure the service manually.
 2. Set the service root directory to `server`, build command to `npm install`, and start command to `npm start`.
-3. Set `MONGODB_URI` to the Atlas URI and `CLIENT_URL` to a comma-separated list including the final Vercel origin. Render generates the secret JWT key from `render.yaml`; do not add credentials to the file.
+3. Set `MONGODB_URI`, `SEED_DEMO_PASSWORD`, and `AI_API_KEY` (if AI is enabled) as Render secrets. Set `CLIENT_URL` to the exact Vercel origin; Render generates `JWT_SECRET`. Do not add credentials or deployment-specific origins to the repository.
 4. After deploy, verify the health URL: `https://your-brandguard-api.onrender.com/api/health`. It should return `{"status":"ok","db":"connected"}`.
 5. Optional: add an UptimeRobot monitor on `/api/health` (5-minute interval) so the free-tier service does not spin down.
 

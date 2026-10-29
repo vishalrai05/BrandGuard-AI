@@ -8,15 +8,26 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20.20.2
+      - key: NODE_ENV
+        value: production
+      # Secret connection string; enter in the Render dashboard.
       - key: MONGODB_URI
         sync: false
+      # Render generates this signing secret.
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 7d
+      # Secret demo account password; required for production seeding.
+      - key: SEED_DEMO_PASSWORD
+        sync: false
+      - key: ALLOW_SELF_APPROVAL
+        value: "false"
+      # Optional secret; omit to use deterministic analysis only.
       - key: AI_API_KEY
         sync: false
       - key: AI_MODEL
         value: gemini-3.8-flash
+      # Set the exact Vercel deployment origin in Render; not hard-coded here.
       - key: CLIENT_URL
-        value: https://your-app.vercel.app,http://localhost:5173
+        sync: false

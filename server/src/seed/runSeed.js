@@ -4,7 +4,7 @@ import { seed } from './seed.js'
 
 if (!process.argv.includes('--confirm')) {
   console.error(
-    'Seed cancelled: this clears and replaces the Rules and Facts collections. Re-run with `npm run seed -- --confirm` to continue.',
+    'Seed cancelled. Re-run with `npm run seed -- --confirm` to add any missing sample Rules, Facts, and demo users. Existing records and demo passwords are preserved.',
   )
   process.exitCode = 1
 } else {
