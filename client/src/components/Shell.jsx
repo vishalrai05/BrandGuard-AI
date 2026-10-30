@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
-  BookOpenCheck, ClipboardCheck, FileText, LayoutDashboard, Settings2,
+  BookOpenCheck, ChartColumnIncreasing, ClipboardCheck, FileText, LayoutDashboard, Settings2,
 } from 'lucide-react'
 import { api } from '../api/client.js'
 import { useTheme } from '../hooks/useTheme.jsx'
@@ -13,6 +13,7 @@ import TopBar from './TopBar.jsx'
 const navItems = [
   { label: 'Review', to: '/', icon: ClipboardCheck, end: true },
   { label: 'History', to: '/history', icon: LayoutDashboard },
+  { label: 'Insights', to: '/insights', icon: ChartColumnIncreasing },
   { label: 'Rules', to: '/rules', icon: BookOpenCheck },
   { label: 'Facts', to: '/facts', icon: FileText },
 ]

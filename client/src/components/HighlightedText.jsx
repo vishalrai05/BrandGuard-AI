@@ -15,7 +15,7 @@ function signalIcon(tone) {
 }
 
 function HighlightedText({ text, findings, selectedFindingId, onSelect, evidenceByCode = {} }) {
-  const segments = useMemo(() => {
+  const { segments, findingByKey, findingRank } = useMemo(() => {
     const validFindings = findings
       .map((finding, index) => ({
         ...finding,
@@ -25,19 +25,27 @@ function HighlightedText({ text, findings, selectedFindingId, onSelect, evidence
       }))
       .filter((finding) => finding.end > finding.start)
     const boundaries = new Set([0, text.length])
+    const starts = new Map()
+    const ends = new Map()
     for (const finding of validFindings) {
       boundaries.add(finding.start)
       boundaries.add(finding.end)
+      starts.set(finding.start, [...(starts.get(finding.start) ?? []), finding._key])
+      ends.set(finding.end, [...(ends.get(finding.end) ?? []), finding._key])
     }
     const points = [...boundaries].sort((a, b) => a - b)
-    return points.slice(0, -1).map((start, index) => {
+    const active = new Set()
+    const computed = points.slice(0, -1).map((start, index) => {
+      for (const key of ends.get(start) ?? []) active.delete(key)
+      for (const key of starts.get(start) ?? []) active.add(key)
       const end = points[index + 1]
-      return {
-        start,
-        end,
-        findingIds: validFindings.filter((finding) => finding.start < end && finding.end > start).map((finding) => finding._key),
-      }
+      return { start, end, findingIds: [...active] }
     })
+    return {
+      segments: computed,
+      findingByKey: new Map(validFindings.map((finding) => [finding._key, finding])),
+      findingRank: new Map(validFindings.map((finding, index) => [finding._key, index + 1])),
+    }
   }, [findings, text])
 
   return (
@@ -55,13 +63,13 @@ function HighlightedText({ text, findings, selectedFindingId, onSelect, evidence
             const content = text.slice(segment.start, segment.end)
             if (segment.findingIds.length === 0) return <span key={`text-${segment.start}`}>{content}</span>
             const findingId = segment.findingIds.includes(selectedFindingId) ? selectedFindingId : segment.findingIds[0]
-            const active = findings.filter((finding, index) => segment.findingIds.includes(finding._id ?? `finding-${index}`))
+            const active = segment.findingIds.map((key) => findingByKey.get(key)).filter(Boolean)
             const tone = segmentTone(active)
             const primary = active.find((finding) => finding._id === findingId) ?? active[0]
             const typeLabel = findingTypeLabel(primary, evidenceByCode[primary?.evidence?.refCode])
             const SignalIcon = signalIcon(tone)
             const showSignal = primary && primary.startIndex === segment.start
-            const findingNumber = Math.max(0, findings.findIndex((finding, index) => (finding._id ?? `finding-${index}`) === findingId)) + 1
+            const findingNumber = findingRank.get(findingId) ?? 1
             return (
               <mark
                 aria-label={`${active.map((finding) => findingTypeLabel(finding, evidenceByCode[finding.evidence?.refCode])).join(', ')} finding`}
@@ -83,6 +91,7 @@ function HighlightedText({ text, findings, selectedFindingId, onSelect, evidence
                   <span className="highlight-signal">
                     <sup aria-hidden="true" className="highlight-number">{findingNumber}</sup>
                     <SignalIcon aria-hidden="true" size={11} />
+                    {primary?.evidence?.kind === 'check' && <><span className="highlight-origin-label">CHECK</span><span className="highlight-code-label">{primary.evidence.refCode}</span></>}
                     <span className="highlight-signal-label">{typeLabel}</span>
                   </span>
                 )}

@@ -30,6 +30,7 @@ function FindingDetail({ finding, review, evidenceRecord, onStatusChange, onAddC
       <div className="detail-pills">
         <Pill tone={finding.type === 'needs_verification' ? 'verification' : finding.severity}>{findingTypeLabel(finding, evidenceRecord)}</Pill>
         <Pill tone="neutral">{finding.status}</Pill>
+        {finding.evidence?.kind === 'check' && <><Pill tone="neutral">CHECK</Pill><Pill className="finding-code" tone="neutral">{finding.evidence.refCode}</Pill></>}
         {finding.source === 'ai' && <Pill tone="neutral">AI</Pill>}
       </div>
       <section className="detail-section">
@@ -50,6 +51,11 @@ function FindingDetail({ finding, review, evidenceRecord, onStatusChange, onAddC
         <h3>Evidence</h3>
         {finding.type === 'needs_verification' ? (
           <p className="verification-note">No supporting fact found in the library. Verify before publishing.</p>
+        ) : finding.evidence?.kind === 'check' ? (
+          <>
+            <p className="detail-evidence-title">{finding.evidence.refCode} · Measured check</p>
+            <p className="detail-copy">{finding.evidence.excerpt}</p>
+          </>
         ) : (
           <>
             <p className="detail-evidence-title">{finding.evidence?.refCode} · {evidenceRecord?.title ?? evidenceRecord?.statement ?? 'Evidence reference'}</p>

@@ -2,9 +2,16 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+function isSafeRegex(pattern) {
+  if (typeof pattern !== 'string' || pattern.length > 200) return false
+  if ((/\([^)]*[+*{][^)]*\)[+*{]/.test(pattern) || /\([^)]*\|[^)]*\)[+*{]/.test(pattern) || /(?:\.\*|\.\+){2,}/.test(pattern)) && pattern !== '(?:[^.!?]*![^.!?]*){2,}') return false
+  return true
+}
+
 function makeFinding(rule, matchedText, startIndex, endIndex) {
   return {
     type: 'rule_violation',
+    category: rule.category,
     severity: rule.severity,
     matchedText,
     startIndex,
@@ -63,6 +70,7 @@ function checkRequiredPhrase(rule, sentence) {
   }
 
   if (rule.trigger) {
+    if (!isSafeRegex(rule.trigger)) return []
     let trigger
     try {
       trigger = new RegExp(rule.trigger, 'i')
@@ -98,6 +106,7 @@ function checkPattern(rule, sentence) {
   if (!rule.pattern) {
     return []
   }
+  if (!isSafeRegex(rule.pattern)) return []
 
   let expression
   try {

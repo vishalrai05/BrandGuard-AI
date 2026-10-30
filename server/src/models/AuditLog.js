@@ -17,6 +17,7 @@ const auditLogSchema = new mongoose.Schema(
         'review_approved',
         'changes_requested',
         'comment_added',
+        'report_exported',
       ],
     },
     from: { type: String },

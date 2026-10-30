@@ -1,10 +1,12 @@
 import cors from 'cors'
 import express from 'express'
-import factsRouter from './routes/facts.js'
+import { factRouter as factsRouter, ruleRouter as rulesRouter } from './routes/libraryRoutes.js'
 import healthRouter from './routes/health.js'
 import reviewsRouter from './routes/reviews.js'
-import rulesRouter from './routes/rules.js'
+import brandsRouter from './routes/brands.js'
 import authRouter from './routes/auth.js'
+import insightsRouter from './routes/insights.js'
+import documentsRouter from './routes/documents.js'
 
 const allowedOrigins = (process.env.CLIENT_URL ?? '')
   .split(',')
@@ -29,9 +31,12 @@ app.use(
 app.use(express.json())
 app.use('/api/health', healthRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/brands', brandsRouter)
 app.use('/api/rules', rulesRouter)
 app.use('/api/facts', factsRouter)
 app.use('/api/reviews', reviewsRouter)
+app.use('/api/insights', insightsRouter)
+app.use('/api/documents', documentsRouter)
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Route not found.' })

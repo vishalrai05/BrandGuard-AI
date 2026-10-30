@@ -3,6 +3,7 @@ import { connectDB } from '../config/db.js'
 import Fact from '../models/Fact.js'
 import Rule from '../models/Rule.js'
 import User from '../models/User.js'
+import Brand from '../models/Brand.js'
 
 export const rules = [
   {
@@ -288,24 +289,30 @@ export const facts = [
   },
 ]
 
-export async function seed({ connect = connectDB, ruleModel = Rule, factModel = Fact, userModel = User, log = console.log } = {}) {
+export async function seed({ connect = connectDB, ruleModel = Rule, factModel = Fact, userModel = User, brandModel = Brand, log = console.log } = {}) {
   if (process.env.NODE_ENV === 'production' && !process.env.SEED_DEMO_PASSWORD) {
     throw new Error('SEED_DEMO_PASSWORD must be set before seeding in production.')
   }
   await connect({ quiet: true })
 
   const demoPassword = process.env.SEED_DEMO_PASSWORD || 'NimbusDemo2026!'
+  let brand
+  if (brandModel === Brand && ruleModel === Rule && factModel === Fact) {
+    brand = await brandModel.findOne({ name: /^Nimbus Notes$/i })
+    if (!brand) brand = await brandModel.create({ name: 'Nimbus Notes', slug: 'nimbus-notes', description: 'Default Nimbus Notes brand library.', isDefault: true })
+    else if (!brand.isDefault) { brand.isDefault = true; await brand.save() }
+  } else brand = { _id: 'test-default-brand' }
   await ruleModel.bulkWrite(rules.map((rule) => ({
     updateOne: {
-      filter: { code: rule.code },
-      update: { $setOnInsert: rule },
+      filter: { brand: brand._id, code: rule.code },
+      update: { $setOnInsert: { ...rule, brand: brand._id, status: 'active', active: true, origin: 'seed' } },
       upsert: true,
     },
   })))
   await factModel.bulkWrite(facts.map((fact) => ({
     updateOne: {
-      filter: { code: fact.code },
-      update: { $setOnInsert: fact },
+      filter: { brand: brand._id, code: fact.code },
+      update: { $setOnInsert: { ...fact, brand: brand._id, status: 'active', origin: 'seed' } },
       upsert: true,
     },
   })))

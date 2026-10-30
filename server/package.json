@@ -7,6 +7,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed/runSeed.js",
+    "migrate:brands": "node scripts/migrate-brands.mjs",
     "test": "node --test"
   },
   "engines": {
@@ -20,7 +21,10 @@
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.11.3"
+    "mammoth": "^1.13.0",
+    "mongoose": "^9.11.3",
+    "multer": "^2.5.0",
+    "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

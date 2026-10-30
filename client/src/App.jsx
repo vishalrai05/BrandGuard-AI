@@ -4,10 +4,11 @@ import Shell from './components/Shell.jsx'
 import { GuestRoute, ProtectedRoute } from './components/AuthRoutes.jsx'
 import { ThemeProvider } from './hooks/useTheme.jsx'
 import AuthPage from './pages/AuthPage.jsx'
-import FactsPage from './pages/FactsPage.jsx'
 import HistoryPage from './pages/HistoryPage.jsx'
 import ReviewPage from './pages/ReviewPage.jsx'
-import RulesPage from './pages/RulesPage.jsx'
+import LibraryPage from './pages/LibraryPage.jsx'
+import InsightsPage from './pages/InsightsPage.jsx'
+import ReportPage from './pages/ReportPage.jsx'
 
 function App() {
   const navigate = useNavigate()
@@ -52,8 +53,10 @@ function App() {
             path="/"
           />
           <Route element={<HistoryPage />} path="/history" />
-          <Route element={<RulesPage />} path="/rules" />
-          <Route element={<FactsPage />} path="/facts" />
+          <Route element={<ReportPage />} path="/reviews/:id/report" />
+          <Route element={<InsightsPage />} path="/insights" />
+          <Route element={<LibraryPage kind="rule" />} path="/rules" />
+          <Route element={<LibraryPage kind="fact" />} path="/facts" />
           <Route
             element={<ReviewPage newReviewRequest={newReviewRequest} onSummaryChange={setReviewSummary} search={search} setToast={setToast} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />}
             path="/reviews/:id"

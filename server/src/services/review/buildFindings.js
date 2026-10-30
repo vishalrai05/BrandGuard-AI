@@ -1,4 +1,4 @@
-export default function buildFindings(ruleFindings, factFindings) {
+export default function buildFindings(ruleFindings, factFindings, qualityFindings = []) {
   const findings = []
   const seen = new Set()
   const mismatchedClaims = new Set(
@@ -26,7 +26,17 @@ export default function buildFindings(ruleFindings, factFindings) {
     }
 
     seen.add(key)
-    findings.push({ source: 'rules', ...finding })
+    findings.push({ source: finding.source ?? 'rules', ...finding })
+  }
+
+  const ruleSpanCategories = new Set(findings
+    .filter((finding) => finding.source === 'rules')
+    .map((finding) => `${finding.startIndex}:${finding.endIndex}:${finding.category ?? ''}`))
+  for (const finding of qualityFindings) {
+    // Exact-span findings from different categories are useful together; when
+    // the categories match, the original rule finding remains authoritative.
+    if (ruleSpanCategories.has(`${finding.startIndex}:${finding.endIndex}:${finding.category ?? ''}`)) continue
+    findings.push({ source: 'quality', ...finding })
   }
 
   findings.sort(

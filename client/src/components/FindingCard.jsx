@@ -38,8 +38,8 @@ function FindingCard({ finding, evidenceRecord, onOpen, onMove, onCopy, readOnly
         <button aria-label={readOnly ? 'Finding drag disabled while review is locked' : 'Drag finding'} className="drag-handle" disabled={readOnly} {...attributes} {...listeners} onClick={(event) => event.stopPropagation()} type="button">
           <GripVertical size={17} />
         </button>
-        <Pill tone={finding.type === 'needs_verification' ? 'verification' : finding.type === 'fact_mismatch' ? 'mismatch' : 'rule'}>
-          {finding.type === 'needs_verification' ? 'VERIFY' : finding.type === 'fact_mismatch' ? 'MISMATCH' : 'RULE'}
+        <Pill tone={finding.type === 'needs_verification' ? 'verification' : finding.type === 'fact_mismatch' ? 'mismatch' : finding.evidence?.kind === 'check' ? 'neutral' : 'rule'}>
+          {finding.type === 'needs_verification' ? 'VERIFY' : finding.type === 'fact_mismatch' ? 'MISMATCH' : finding.evidence?.kind === 'check' ? 'CHECK' : 'RULE'}
         </Pill>
         {finding.evidence?.refCode && <Pill className="finding-code" tone="neutral">{finding.evidence.refCode}</Pill>}
         <details className="card-menu" onClick={(event) => event.stopPropagation()} onToggle={(event) => setMenuOpen(event.currentTarget.open)}>
@@ -69,7 +69,7 @@ function FindingCard({ finding, evidenceRecord, onOpen, onMove, onCopy, readOnly
       </div>
       <div className="finding-card-meta">
         {finding.source === 'ai' && <Pill tone="neutral">AI</Pill>}
-        {evidenceRecord?.category && <Pill tone="neutral">{evidenceRecord.category}</Pill>}
+        {(finding.category ?? evidenceRecord?.category) && <Pill tone="neutral">{finding.category ?? evidenceRecord.category}</Pill>}
         {finding.status === 'accepted' && <Pill tone="success"><Check size={12} /> Accepted</Pill>}
         {finding.status === 'dismissed' && <Pill tone="neutral"><Undo2 size={12} /> Dismissed</Pill>}
         <Pill className="comment-count" tone="neutral" title={`${finding.comments?.length ?? 0} comments`}><MessageSquare size={11} /> {finding.comments?.length ?? 0}</Pill>

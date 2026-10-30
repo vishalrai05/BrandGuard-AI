@@ -5,6 +5,7 @@ const ruleTypeLabels = {
 }
 
 export function findingTypeLabel(finding, evidenceRecord) {
+  if (finding?.type === 'quality_check' || finding?.evidence?.kind === 'check') return 'Quality check'
   if (finding?.type === 'rule_violation') {
     return ruleTypeLabels[evidenceRecord?.type] ?? 'Brand rule'
   }

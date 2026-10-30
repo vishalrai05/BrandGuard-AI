@@ -28,6 +28,12 @@ test('review engine detects planted issues and preserves evidence offsets', asyn
       brandName: 'Nimbus Notes',
       useAI: false,
     })
+    const qualityFindings = findings.filter((finding) => finding.source === 'quality')
+    assert.deepEqual(
+      qualityFindings.map((finding) => finding.evidence.refCode),
+      [],
+      'The demo document does not trigger built-in quality checks',
+    )
     const ruleCodes = new Set(
       findings
         .filter((finding) => finding.type === 'rule_violation')

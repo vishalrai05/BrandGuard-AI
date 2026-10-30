@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { BookOpenCheck, ListFilter, Plus, SlidersHorizontal, X } from 'lucide-react'
+import { BookOpenCheck, FileText, ListFilter, Plus, SlidersHorizontal, X } from 'lucide-react'
 import { api } from '../api/client.js'
 import { copyText } from '../utils/copyText.js'
 import Drawer from '../components/Drawer.jsx'
@@ -17,6 +17,8 @@ import WorkflowStatusBadge from '../components/WorkflowStatusBadge.jsx'
 import WorkflowDecisionModal from '../components/WorkflowDecisionModal.jsx'
 import WorkflowSummary from '../components/WorkflowSummary.jsx'
 import AuditTrail from '../components/AuditTrail.jsx'
+import ReadabilityPanel from '../components/ReadabilityPanel.jsx'
+import DocumentUploadPanel from '../components/DocumentUploadPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
 const sampleText =
@@ -39,7 +41,15 @@ function ReviewPage({
   const { user } = useAuth()
   const [inputText, setInputText] = useState('')
   const [useAI, setUseAI] = useState(true)
+  const [qualityChecks, setQualityChecks] = useState(true)
   const [brandName, setBrandName] = useState('Nimbus Notes')
+  const [brands, setBrands] = useState([])
+  const [selectedBrandId, setSelectedBrandId] = useState(() => window.localStorage.getItem('brandguard-brand') ?? '')
+  const [selectedSetup, setSelectedSetup] = useState(null)
+  const [newBrandOpen, setNewBrandOpen] = useState(false)
+  const [newBrandName, setNewBrandName] = useState('')
+  const [newBrandError, setNewBrandError] = useState('')
+  const [reviewMode, setReviewMode] = useState('text')
   const [review, setReview] = useState(null)
   const [pageState, setPageState] = useState(id ? 'loading' : 'empty')
   const [submitting, setSubmitting] = useState(false)
@@ -81,12 +91,46 @@ function ReviewPage({
   }, [])
 
   useEffect(() => {
+    let active = true
+    api.getBrands().then((items) => {
+      if (!active) return
+      setBrands(items)
+      const saved = items.find((brand) => String(brand._id) === window.localStorage.getItem('brandguard-brand'))
+      const initial = saved ?? items.find((brand) => brand.isDefault) ?? items[0]
+      if (initial && !window.localStorage.getItem('brandguard-brand')) setSelectedBrandId(String(initial._id))
+    }).catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    if (selectedBrandId) window.localStorage.setItem('brandguard-brand', selectedBrandId)
+  }, [selectedBrandId])
+
+  useEffect(() => {
+    let active = true
+    if (!selectedBrandId) { setSelectedSetup(null); return undefined }
+    api.getSetupStatus(selectedBrandId).then((status) => { if (active) setSelectedSetup(status) }).catch(() => { if (active) setSelectedSetup(null) })
+    return () => { active = false }
+  }, [selectedBrandId])
+
+  async function createBrandFromReview() {
+    setNewBrandError('')
+    try {
+      const created = await api.createBrand(newBrandName, '')
+      const updated = await api.getBrands()
+      setBrands(updated); setSelectedBrandId(String(created._id)); setNewBrandName(''); setNewBrandOpen(false)
+      navigate('/rules', { state: { brandId: String(created._id), openSetup: true } })
+    } catch (requestError) { setNewBrandError(requestError.message) }
+  }
+
+  useEffect(() => {
     if (newReviewRequest === lastNewRequest.current) return
     lastNewRequest.current = newReviewRequest
     setDrawerOpen(false)
     if (review) {
       setInputText('')
       setBrandName('Nimbus Notes')
+      setReviewMode('text')
       setInputOpen(true)
     } else {
       setInputOpen(false)
@@ -99,6 +143,7 @@ function ReviewPage({
     if (!location.state?.openNewReview) return
     setInputText('')
     setBrandName('Nimbus Notes')
+    setReviewMode('text')
     setDrawerOpen(false)
     setInputOpen(false)
     navigate('/', { replace: true, state: {} })
@@ -169,7 +214,7 @@ function ReviewPage({
   useEffect(() => {
     let active = true
     const options = { onSlow: showSlowMessage, onSlowComplete: finishSlowRequest }
-    Promise.all([api.getRules(options), api.getFacts(options)])
+    Promise.all([api.getRules({ brand: selectedBrandId }, options), api.getFacts({ brand: selectedBrandId }, options)])
       .then(([nextRules, nextFacts]) => {
         if (!active) return
         setRules(nextRules)
@@ -180,7 +225,7 @@ function ReviewPage({
         if (active) setEvidenceError(requestError.message)
       })
     return () => { active = false }
-  }, [finishSlowRequest, showSlowMessage])
+  }, [finishSlowRequest, showSlowMessage, selectedBrandId])
 
   const evidenceByCode = useMemo(() => {
     const records = {}
@@ -251,10 +296,10 @@ function ReviewPage({
     setError('')
     setRetryAction(() => submitReview)
     try {
-      const result = await api.createReview(inputText, brandName.trim() || 'Nimbus Notes', useAI, {
+      const result = await api.createReview(inputText, brandName.trim() || 'Nimbus Notes', useAI, qualityChecks, undefined, {
         onSlow: showSlowMessage,
         onSlowComplete: finishSlowRequest,
-      })
+      }, selectedBrandId || undefined)
       const savedReview = await api.getReview(result._id)
       setReview(savedReview)
       refreshAudit()
@@ -271,6 +316,11 @@ function ReviewPage({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function openUploadedReview(reviewId) {
+    setInputOpen(false)
+    navigate(`/reviews/${reviewId}`)
   }
 
   async function updateFindingStatus(finding, status) {
@@ -397,12 +447,12 @@ function ReviewPage({
     if (filter === 'needs_verification' && finding.type !== filter) return false
     if (['high', 'medium', 'low'].includes(filter) && finding.severity !== filter) return false
     if (['rule_violation', 'fact_mismatch'].includes(filter) && finding.type !== filter) return false
-    const category = evidenceByCode[finding.evidence?.refCode]?.category
+    const category = finding.category ?? evidenceByCode[finding.evidence?.refCode]?.category
     if (categoryFilter !== 'all' && category !== categoryFilter) return false
     return true
   }), [categoryFilter, evidenceByCode, filter, review, search, statusFilter])
   const selectedFinding = review?.findings.find((finding) => finding._id === selectedFindingId)
-  const categories = [...new Set([...rules, ...facts].map((item) => item.category).filter(Boolean))]
+  const categories = [...new Set([...rules, ...facts].map((item) => item.category).concat((review?.findings ?? []).map((finding) => finding.category)).filter(Boolean))]
   const workflowStatus = review?.workflowStatus ?? 'draft'
   const workflowLocked = ['pending_approval', 'approved'].includes(workflowStatus)
   const openHighFindings = review?.findings.filter((finding) => finding.severity === 'high' && finding.status === 'open').length ?? 0
@@ -416,9 +466,9 @@ function ReviewPage({
           <p className="page-description">
             {review ? 'Findings and evidence' : 'Check copy against approved rules and facts.'}
           </p>
-          {review && <div className="review-owner-line"><WorkflowStatusBadge status={workflowStatus} /><span>Created by {review.createdBy?.name ?? 'Legacy'}</span></div>}
+          {review && <div className="review-owner-line"><WorkflowStatusBadge status={workflowStatus} /><span>Created by {review.createdBy?.name ?? 'Legacy'}</span>{review.source?.kind === 'document' && <span className="source-badge"><FileText size={12} /> {review.source.filename}</span>}</div>}
         </div>
-        {review && <div className="review-meta"><BookOpenCheck size={16} /> {review.findings.length} findings <span>·</span> Updated {new Date(review.updatedAt ?? review.createdAt).toLocaleDateString()}</div>}
+        {review && <div className="review-heading-actions"><div className="review-meta"><BookOpenCheck size={16} /> {review.findings.length} findings <span>·</span> Updated {new Date(review.updatedAt ?? review.createdAt).toLocaleDateString()}</div><button className="button-secondary export-report-button" onClick={() => navigate(`/reviews/${review._id}/report`)} type="button"><FileText size={14} /> Export report{workflowStatus !== 'approved' && <small>Draft</small>}</button></div>}
       </div>
 
       {review && (
@@ -475,6 +525,10 @@ function ReviewPage({
         </section>
       )}
 
+      {review?.summary?.readability && Number.isFinite(review.summary.readability.wordCount) && (review.summary.readability.wordCount > 0 || review.summary.readability.sentenceCount > 0) && (
+        <ReadabilityPanel metrics={review.summary.readability} />
+      )}
+
       {slowRequest && <div className="waking-message" role="status" aria-live="polite">This is taking longer than usual. The server may be starting up or still processing your request.</div>}
       {error && !inputOpen && (
         <div className="inline-error" role="alert">
@@ -486,13 +540,32 @@ function ReviewPage({
       {review?.aiStatus === 'unavailable' && (
         <p className="inline-warning" role="status">AI unavailable, showing rule-based results only.</p>
       )}
+      {review?.aiStatus === 'partial' && <p className="inline-warning" role="status">{review.ai?.message || 'AI reviewed only part of this document. Rule-based checks covered the full text.'}</p>}
+      {review?.aiStatus === 'failed' && <p className="inline-warning" role="status">{review.ai?.message || 'AI review could not be completed. Rule-based checks covered the full text.'}</p>}
+      {review?.source?.truncated && <p className="inline-warning" role="status">This document was truncated to {review.source.charCount?.toLocaleString()} characters before review.</p>}
+      {review?.findingsTruncated && <p className="inline-warning" role="status">Showing the top 1,000 findings out of {review.summary?.totalDetected?.toLocaleString() ?? 'more than 1,000'} detected.</p>}
 
       {pageState === 'loading' && id && <LoadingState label={slowRequest ? 'Still loading; the server may be starting up or processing your request.' : 'Loading saved review…'} />}
       {!review && !id && (
         <div className="empty-review-layout">
           <EmptyState />
-          <InputPanel
-            brandName={brandName}
+          <div>
+            <div className="brand-picker-row">
+              <label className="field-label" htmlFor="review-brand">Review brand</label>
+              <select id="review-brand" className="text-input single-line" value={selectedBrandId} onChange={(event) => setSelectedBrandId(event.target.value)}>
+                {brands.map((brand) => <option key={brand._id} value={brand._id}>{brand.name}</option>)}
+              </select>
+              {user.role === 'approver' && <button className="button-secondary button-small" onClick={() => setNewBrandOpen((open) => !open)} type="button">New brand</button>}
+            </div>
+            {selectedBrandId && (() => { const selected = brands.find((brand) => String(brand._id) === String(selectedBrandId)); return selected && (selected.counts?.activeRules ?? 0) + (selected.counts?.activeFacts ?? 0) === 0 })() && <p className="inline-warning" role="status">This brand has no active rules or facts. Reviews will run generic quality checks until library items are approved.</p>}
+            {selectedSetup && !brands.find((brand) => String(brand._id) === String(selectedBrandId))?.isDefault && selectedSetup.steps.some((step) => step.status !== 'done') && <aside className="review-setup-card"><div><strong>Finish setting up {brands.find((brand) => String(brand._id) === String(selectedBrandId))?.name}</strong><p>{selectedSetup.steps.find((step) => step.status === 'current')?.title ?? 'Brand setup'}</p></div><button className="button-secondary button-small" onClick={() => navigate('/rules', { state: { brandId: selectedBrandId, openSetup: true } })} type="button">Continue setup</button></aside>}
+            {newBrandOpen && <form className="new-brand-inline" onSubmit={(event) => { event.preventDefault(); createBrandFromReview() }}><label className="field-label" htmlFor="new-review-brand">Brand name</label><input id="new-review-brand" className="text-input single-line" minLength={2} maxLength={60} required value={newBrandName} onChange={(event) => setNewBrandName(event.target.value)} /><button className="button-primary" type="submit">Create brand</button>{newBrandError && <p className="inline-warning" role="alert">{newBrandError}</p>}</form>}
+            <div aria-label="Review input type" className="review-mode-tabs" role="tablist">
+              <button aria-selected={reviewMode === 'text'} className={reviewMode === 'text' ? 'review-mode-tab active' : 'review-mode-tab'} onClick={() => setReviewMode('text')} role="tab" type="button">Paste text</button>
+              <button aria-selected={reviewMode === 'upload'} className={reviewMode === 'upload' ? 'review-mode-tab active' : 'review-mode-tab'} onClick={() => setReviewMode('upload')} role="tab" type="button">Upload documents</button>
+            </div>
+            {reviewMode === 'text' ? <InputPanel
+            brandName={selectedBrandId ? '' : brandName}
             inputText={inputText}
             loading={submitting}
             onBrandNameChange={setBrandName}
@@ -502,7 +575,10 @@ function ReviewPage({
             onTextChange={setInputText}
             useAI={useAI}
             onUseAIChange={setUseAI}
-          />
+            qualityChecks={qualityChecks}
+            onQualityChecksChange={setQualityChecks}
+            /> : <DocumentUploadPanel brandId={selectedBrandId} brandName={brandName} setBrandName={setBrandName} hideBrandName={Boolean(selectedBrandId)} useAI={useAI} onUseAIChange={setUseAI} qualityChecks={qualityChecks} onQualityChecksChange={setQualityChecks} disabled={submitting} onOpenReview={openUploadedReview} />}
+          </div>
         </div>
       )}
 
@@ -596,7 +672,12 @@ function ReviewPage({
         <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setInputOpen(false) }}>
           <section aria-labelledby="new-review-title" aria-modal="true" className="new-review-modal" ref={inputModalRef} role="dialog">
             <div className="modal-header"><div><p className="eyebrow">New analysis</p><h2 id="new-review-title">Start a new review</h2></div><button aria-label="Close new review dialog" className="icon-button" onClick={() => setInputOpen(false)} type="button"><X size={18} /></button></div>
-            <InputPanel brandName={brandName} inputText={inputText} loading={submitting} onBrandNameChange={setBrandName} onClear={clearInput} onLoadSample={() => setInputText(sampleText)} onReview={submitReview} onTextChange={setInputText} useAI={useAI} onUseAIChange={setUseAI} />
+            <div aria-label="Review input type" className="review-mode-tabs" role="tablist">
+              <button aria-selected={reviewMode === 'text'} className={reviewMode === 'text' ? 'review-mode-tab active' : 'review-mode-tab'} onClick={() => setReviewMode('text')} role="tab" type="button">Paste text</button>
+              <button aria-selected={reviewMode === 'upload'} className={reviewMode === 'upload' ? 'review-mode-tab active' : 'review-mode-tab'} onClick={() => setReviewMode('upload')} role="tab" type="button">Upload documents</button>
+            </div>
+            <div className="brand-picker-row"><label className="field-label" htmlFor="modal-review-brand">Review brand</label><select id="modal-review-brand" className="text-input single-line" value={selectedBrandId} onChange={(event) => setSelectedBrandId(event.target.value)}>{brands.map((brand) => <option key={brand._id} value={brand._id}>{brand.name}</option>)}</select>{user.role === 'approver' && <button className="button-secondary button-small" onClick={() => setNewBrandOpen((open) => !open)} type="button">New brand</button>}</div>
+            {reviewMode === 'text' ? <InputPanel brandName={selectedBrandId ? '' : brandName} hideBrandName={Boolean(selectedBrandId)} inputText={inputText} loading={submitting} onBrandNameChange={setBrandName} onClear={clearInput} onLoadSample={() => setInputText(sampleText)} onReview={submitReview} onTextChange={setInputText} useAI={useAI} onUseAIChange={setUseAI} qualityChecks={qualityChecks} onQualityChecksChange={setQualityChecks} /> : <DocumentUploadPanel brandId={selectedBrandId} brandName={brandName} hideBrandName={Boolean(selectedBrandId)} setBrandName={setBrandName} useAI={useAI} onUseAIChange={setUseAI} qualityChecks={qualityChecks} onQualityChecksChange={setQualityChecks} disabled={submitting} onOpenReview={openUploadedReview} />}
             {pageState === 'error' && <p className="inline-warning">{error}</p>}
             <button className="modal-close-link" onClick={() => setInputOpen(false)} type="button"><Plus size={14} /> Keep editing later</button>
           </section>

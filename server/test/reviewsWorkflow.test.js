@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import mongoose from 'mongoose'
 import test from 'node:test'
 import AuditLog from '../src/models/AuditLog.js'
+import Brand from '../src/models/Brand.js'
 import Fact from '../src/models/Fact.js'
 import Review from '../src/models/Review.js'
 import Rule from '../src/models/Rule.js'
@@ -49,9 +50,55 @@ test('creating a review stores its creator and appends review_created', async ()
     }, res)
     assert.equal(res.statusCode, 201)
     assert.equal(String(createdReview.createdBy), String(userId))
+    assert.equal(createdReview.qualityChecksRun, true)
     assert.equal(auditEntries.length, 1)
     assert.equal(auditEntries[0].action, 'review_created')
     assert.equal(auditEntries[0].actorName, 'Rae Reviewer')
+  } finally {
+    Rule.find = originals.ruleFind
+    Fact.find = originals.factFind
+    Review.create = originals.reviewCreate
+    AuditLog.create = originals.auditCreate
+  }
+})
+
+test('new reviews without a brand use the default brand and snapshot its name', async (t) => {
+  const originals = { readyState: mongoose.connection.readyState, brandFindOne: Brand.findOne, ruleFind: Rule.find, factFind: Fact.find, reviewCreate: Review.create, auditCreate: AuditLog.create }
+  const brand = { _id: new mongoose.Types.ObjectId(), name: 'Nimbus Notes' }
+  let saved
+  mongoose.connection.readyState = 1
+  Brand.findOne = async () => brand
+  Rule.find = () => ({ lean: async () => [] })
+  Fact.find = () => ({ lean: async () => [] })
+  Review.create = async (data) => { saved = data; return data }
+  AuditLog.create = async (data) => data
+  t.after(() => {
+    mongoose.connection.readyState = originals.readyState
+    Brand.findOne = originals.brandFindOne; Rule.find = originals.ruleFind; Fact.find = originals.factFind
+    Review.create = originals.reviewCreate; AuditLog.create = originals.auditCreate
+  })
+  const res = response()
+  await createReview({ body: { inputText: 'A sentence.', useAI: false }, user: { _id: new mongoose.Types.ObjectId(), name: 'Reviewer', role: 'reviewer' } }, res)
+  assert.equal(res.statusCode, 201)
+  assert.equal(String(saved.brand), String(brand._id))
+  assert.equal(saved.brandName, 'Nimbus Notes')
+})
+
+test('review creation stores qualityChecks=false and validates its type', async () => {
+  const originals = { ruleFind: Rule.find, factFind: Fact.find, reviewCreate: Review.create, auditCreate: AuditLog.create }
+  let createdReview
+  Rule.find = () => ({ lean: async () => [] })
+  Fact.find = () => ({ lean: async () => [] })
+  Review.create = async (data) => { createdReview = data; return data }
+  AuditLog.create = async (data) => data
+  try {
+    const res = response()
+    await createReview({ body: { inputText: 'A normal sentence.', useAI: false, qualityChecks: false }, user: { _id: new mongoose.Types.ObjectId(), name: 'Reviewer', role: 'reviewer' } }, res)
+    assert.equal(res.statusCode, 201)
+    assert.equal(createdReview.qualityChecksRun, false)
+    const invalid = response()
+    await createReview({ body: { inputText: 'Copy.', qualityChecks: 'false' }, user: { _id: new mongoose.Types.ObjectId(), name: 'Reviewer', role: 'reviewer' } }, invalid)
+    assert.equal(invalid.statusCode, 400)
   } finally {
     Rule.find = originals.ruleFind
     Fact.find = originals.factFind

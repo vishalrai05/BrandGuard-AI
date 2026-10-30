@@ -1,4 +1,5 @@
 import aiProvider from './aiProvider.js'
+import { getAIConfig } from '../../config/ai.js'
 import splitSentences from '../review/splitSentences.js'
 
 const DEFAULT_TIMEOUT_MS = 15_000
@@ -35,6 +36,7 @@ export function validateAIItems(items, { text, rules, facts, deterministicFindin
   const accepted = []
   const dropped = []
   const occupied = deterministicFindings.map((finding) => [finding.startIndex, finding.endIndex])
+  const normalizedSource = normalizeWithOffsets(text)
 
   const drop = (item, reason) => dropped.push({ item, reason })
   for (const item of items) {
@@ -70,7 +72,7 @@ export function validateAIItems(items, { text, rules, facts, deterministicFindin
       continue
     }
 
-    const match = findTextSpan(text, item.matchedText)
+    const match = findTextSpan(text, item.matchedText, normalizedSource)
     if (!match) {
       drop(item, 'matchedText not found verbatim (case-insensitive, whitespace-tolerant)')
       continue
@@ -142,8 +144,7 @@ function normalizeWithOffsets(value) {
   return { normalized, offsets }
 }
 
-function findTextSpan(text, matchedText) {
-  const source = normalizeWithOffsets(text)
+function findTextSpan(text, matchedText, source = normalizeWithOffsets(text)) {
   const needle = normalizeWithOffsets(matchedText).normalized
   if (!needle) return null
   const normalizedStart = source.normalized.indexOf(needle)
@@ -179,13 +180,17 @@ ${JSON.stringify(deterministicFindings.map(({ type, matchedText, startIndex, end
 
 function buildRewritePrompt({ text, findings, rules, facts }) {
   const sentences = splitSentences(text)
-  const rewrites = findings.map((finding, index) => {
-    const sentence = sentences.find((part) =>
-      finding.startIndex >= part.start && finding.endIndex <= part.end,
-    )
+  const ordered = findings.map((finding, index) => ({ finding, index }))
+    .sort((left, right) => left.finding.startIndex - right.finding.startIndex)
+  const ruleByCode = new Map(rules.map((rule) => [rule.code, rule]))
+  const factByCode = new Map(facts.map((fact) => [fact.code, fact]))
+  let sentenceIndex = 0
+  const rewrites = ordered.map(({ finding, index }) => {
+    while (sentenceIndex < sentences.length && sentences[sentenceIndex].end < finding.startIndex) sentenceIndex += 1
+    const sentence = sentences[sentenceIndex]
     const record = finding.evidence?.kind === 'rule'
-      ? rules.find((rule) => rule.code === finding.evidence.refCode)
-      : facts.find((fact) => fact.code === finding.evidence?.refCode)
+      ? ruleByCode.get(finding.evidence.refCode)
+      : factByCode.get(finding.evidence?.refCode)
     return {
       index,
       sentence: sentence?.text ?? finding.matchedText,
@@ -239,6 +244,7 @@ export function createAIAnalyzer({
   provider = aiProvider,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   logger = console,
+  continueOnFailure = false,
 } = {}) {
   return async function analyze({ text, rules, facts, deterministicFindings }) {
     let analysisResponse
@@ -257,6 +263,8 @@ export function createAIAnalyzer({
         logger.warn?.('[AI] dropped response: invalid JSON')
       }
       error.counts = { returned: 0, kept: 0, dropped: 0 }
+      error.analysisSucceeded = false
+      if (continueOnFailure) return { findings: [], counts: error.counts, analysisSucceeded: false, rewriteSucceeded: false, error }
       throw error
     }
     logger.info?.(`[AI] analysis parsed items: ${items.length}`)
@@ -277,7 +285,7 @@ export function createAIAnalyzer({
     }
     const allFindings = [...deterministicFindings, ...aiFindings]
 
-    if (allFindings.length === 0) return { findings: aiFindings, counts: aiCounts }
+    if (allFindings.length === 0) return { findings: aiFindings, counts: aiCounts, analysisSucceeded: true, rewriteSucceeded: true }
 
     let rewriteItems
     try {
@@ -291,6 +299,9 @@ export function createAIAnalyzer({
       rewriteItems = parseJsonArray(rewriteResponse)
     } catch (error) {
       error.counts = { ...aiCounts, kept: 0, dropped: aiCounts.returned }
+      error.analysisSucceeded = true
+      error.aiFindings = aiFindings
+      if (continueOnFailure) return { findings: aiFindings, counts: aiCounts, analysisSucceeded: true, rewriteSucceeded: false, error }
       throw error
     }
     const rewrites = new Map()
@@ -304,8 +315,122 @@ export function createAIAnalyzer({
       }
     }
     for (const [index, rewrite] of rewrites) allFindings[index].suggestedRewrite = rewrite
-    return { findings: aiFindings, counts: aiCounts }
+    return { findings: aiFindings, counts: aiCounts, analysisSucceeded: true, rewriteSucceeded: true }
   }
 }
 
-export default createAIAnalyzer()
+function lastBoundaryAtOrBefore(boundaries, limit, after) {
+  let low = 0
+  let high = boundaries.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (boundaries[middle] <= limit) low = middle + 1
+    else high = middle
+  }
+  const boundary = boundaries[low - 1]
+  return boundary > after ? boundary : null
+}
+
+function firstBoundaryAfter(boundaries, limit) {
+  let low = 0
+  let high = boundaries.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (boundaries[middle] <= limit) low = middle + 1
+    else high = middle
+  }
+  return boundaries[low] ?? null
+}
+
+export function chunkForAi(text, { maxChars = 6_000 } = {}) {
+  if (typeof text !== 'string') throw new TypeError('text must be a string.')
+  const limit = Number.isSafeInteger(maxChars) && maxChars > 0 ? maxChars : 6_000
+  if (!text.length) return []
+  if (text.length <= limit) return [{ text, start: 0, end: text.length }]
+
+  const paragraphs = [...text.matchAll(/\n[\t ]*\n/g)].map((match) => match.index + match[0].length)
+  const sentences = splitSentences(text).map((sentence) => sentence.end)
+  const words = [...text.matchAll(/\s+/g)].map((match) => match.index + match[0].length)
+  const chunks = []
+  let start = 0
+  while (start < text.length) {
+    const limitEnd = Math.min(text.length, start + limit)
+    let end = limitEnd === text.length ? text.length : lastBoundaryAtOrBefore(paragraphs, limitEnd, start)
+    end ??= lastBoundaryAtOrBefore(sentences, limitEnd, start)
+    end ??= lastBoundaryAtOrBefore(words, limitEnd, start)
+    end ??= firstBoundaryAfter(words, limitEnd)
+    if (!end || end <= start) end = text.length
+    chunks.push({ text: text.slice(start, end), start, end })
+    start = end
+  }
+  return chunks
+}
+
+export function createChunkedAIAnalyzer({
+  provider = aiProvider,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  logger = console,
+  config = getAIConfig,
+} = {}) {
+  return async function analyze({ text, rules, facts, deterministicFindings }) {
+    const settings = typeof config === 'function' ? config() : config
+    const chunks = chunkForAi(text, { maxChars: settings.chunkChars })
+    const selected = chunks.slice(0, settings.maxChunks)
+    const startedAt = Date.now()
+    const findings = []
+    const counts = { returned: 0, kept: 0, dropped: 0 }
+    let chunksAnalysed = 0
+    let incomplete = chunks.length > selected.length
+
+    for (const chunk of selected) {
+      const remaining = settings.totalTimeoutMs - (Date.now() - startedAt)
+      if (remaining <= 0 || chunk.text.length > settings.chunkChars) {
+        incomplete = true
+        break
+      }
+      const localDeterministic = deterministicFindings
+        .filter((finding) => finding.startIndex >= chunk.start && finding.endIndex <= chunk.end)
+        .map((finding) => ({ ...finding, startIndex: finding.startIndex - chunk.start, endIndex: finding.endIndex - chunk.start }))
+      const analyzeChunk = createAIAnalyzer({
+        provider,
+        timeoutMs: Math.max(1, Math.min(timeoutMs, Math.floor(remaining / 2))),
+        logger,
+        continueOnFailure: true,
+      })
+      const result = await analyzeChunk({ text: chunk.text, rules, facts, deterministicFindings: localDeterministic })
+      counts.returned += result.counts.returned
+      counts.kept += result.counts.kept
+      counts.dropped += result.counts.dropped
+      if (result.analysisSucceeded) chunksAnalysed += 1
+      else incomplete = true
+      if (result.rewriteSucceeded === false) incomplete = true
+      for (const localFinding of result.findings) {
+        findings.push({ ...localFinding, startIndex: localFinding.startIndex + chunk.start, endIndex: localFinding.endIndex + chunk.start })
+      }
+      for (const localFinding of localDeterministic) {
+        if (!localFinding.suggestedRewrite) continue
+        const original = deterministicFindings.find((finding) =>
+          finding.startIndex === localFinding.startIndex + chunk.start &&
+          finding.endIndex === localFinding.endIndex + chunk.start &&
+          finding.evidence?.refCode === localFinding.evidence?.refCode,
+        )
+        if (original) original.suggestedRewrite = localFinding.suggestedRewrite
+      }
+      if (result.error) logger.warn?.(`[AI] a document section was incomplete: ${result.error.message}`)
+      if (Date.now() - startedAt >= settings.totalTimeoutMs) {
+        incomplete = true
+        break
+      }
+    }
+
+    const aiStatus = chunksAnalysed === 0 ? 'failed' : incomplete ? 'partial' : 'ok'
+    const message = aiStatus === 'partial'
+      ? `AI analysed ${chunksAnalysed} of ${chunks.length} sections; rule-based checks covered the whole document.`
+      : aiStatus === 'failed'
+        ? 'AI analysis could not be completed; rule-based checks covered the whole document.'
+        : ''
+    return { findings, counts, aiStatus, ai: { chunksTotal: chunks.length, chunksAnalysed, message } }
+  }
+}
+
+export default createChunkedAIAnalyzer()

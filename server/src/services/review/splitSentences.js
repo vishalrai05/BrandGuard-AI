@@ -18,15 +18,19 @@ const abbreviations = new Set([
 ])
 
 function isAbbreviation(text, periodIndex) {
-  const token = text.slice(0, periodIndex).match(/(?:[A-Za-z]\.)*[A-Za-z]+$/)?.[0]
+  let tokenStart = periodIndex - 1
+  const lowerBound = Math.max(0, periodIndex - 32)
+  while (tokenStart >= lowerBound && /[A-Za-z.]/.test(text[tokenStart])) tokenStart -= 1
+  const token = text.slice(tokenStart + 1, periodIndex)
 
   if (!token) {
     return false
   }
 
   const normalized = token.replace(/\.$/, '').toLowerCase()
-  const nextText = text.slice(periodIndex + 1).match(/^\s+(\S)/)
-  const nextCharacter = nextText?.[1]
+  let nextIndex = periodIndex + 1
+  while (nextIndex < text.length && /\s/.test(text[nextIndex])) nextIndex += 1
+  const nextCharacter = text[nextIndex]
 
   if (token.length === 1 && nextCharacter && /[A-Z]/.test(nextCharacter)) {
     return true
@@ -49,7 +53,8 @@ function isAbbreviation(text, periodIndex) {
 
 export default function splitSentences(text) {
   const sentences = []
-  let sentenceStart = 0
+  let contentStart = 0
+  while (contentStart < text.length && /\s/.test(text[contentStart])) contentStart += 1
 
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index]
@@ -79,22 +84,24 @@ export default function splitSentences(text) {
       continue
     }
 
-    const leadingWhitespace = text.slice(sentenceStart, index + 1).match(/^\s*/)?.[0].length ?? 0
-    const start = sentenceStart + leadingWhitespace
-    const sentenceText = text.slice(start, end).trimEnd()
+    const start = contentStart
+    let sentenceEnd = end
+    while (sentenceEnd > start && /\s/.test(text[sentenceEnd - 1])) sentenceEnd -= 1
+    const sentenceText = text.slice(start, sentenceEnd)
 
     if (sentenceText) {
       sentences.push({ text: sentenceText, start, end: start + sentenceText.length })
     }
 
-    sentenceStart = end
+    contentStart = end
+    while (contentStart < text.length && /\s/.test(text[contentStart])) contentStart += 1
     index = end - 1
   }
 
-  const remaining = text.slice(sentenceStart)
-  const leadingWhitespace = remaining.match(/^\s*/)?.[0].length ?? 0
-  const start = sentenceStart + leadingWhitespace
-  const sentenceText = remaining.trim()
+  const start = contentStart
+  let sentenceEnd = text.length
+  while (sentenceEnd > start && /\s/.test(text[sentenceEnd - 1])) sentenceEnd -= 1
+  const sentenceText = text.slice(start, sentenceEnd)
 
   if (sentenceText) {
     sentences.push({ text: sentenceText, start, end: start + sentenceText.length })

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowRightLeft, CheckCheck, CirclePlus, ClipboardList, LoaderCircle, MessageSquare, Send, Undo2 } from 'lucide-react'
+import { ArrowRightLeft, CheckCheck, CirclePlus, ClipboardList, FileDown, LoaderCircle, MessageSquare, Send, Undo2 } from 'lucide-react'
 import { copyText } from '../utils/copyText.js'
 
 const ACTIONS = [
@@ -9,6 +9,7 @@ const ACTIONS = [
   'review_approved',
   'changes_requested',
   'comment_added',
+  'report_exported',
 ]
 
 const actionDetails = {
@@ -18,6 +19,7 @@ const actionDetails = {
   review_approved: { label: 'Review approved', icon: CheckCheck },
   changes_requested: { label: 'Changes requested', icon: Undo2 },
   comment_added: { label: 'Comment added', icon: MessageSquare },
+  report_exported: { label: 'Compliance report exported', icon: FileDown },
 }
 
 function statusName(status = '') {
@@ -33,6 +35,7 @@ function sentenceFor(entry) {
     case 'review_approved': return `${actor} approved the review.`
     case 'changes_requested': return `${actor} requested changes.`
     case 'comment_added': return `${actor} commented on a finding.`
+    case 'report_exported': return `${actor} exported a compliance report.`
     default: return `${actor} updated the review.`
   }
 }

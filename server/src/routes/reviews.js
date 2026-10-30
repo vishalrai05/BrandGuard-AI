@@ -7,6 +7,13 @@ import { isSelfApprovalAllowed } from '../config/workflow.js'
 import AuditLog from '../models/AuditLog.js'
 import { recordAudit } from '../services/audit.js'
 import { rateLimit } from 'express-rate-limit'
+import { getDocumentLimits, sanitizeDocumentFilename } from '../config/documents.js'
+import Rule from '../models/Rule.js'
+import Fact from '../models/Fact.js'
+import Brand from '../models/Brand.js'
+import { QUALITY_CHECK_TITLES } from '../services/review/qualityChecks.js'
+import { buildReport, canonicalFingerprint } from '../services/reports/buildReport.js'
+import { calculateComplianceScore } from '../services/complianceScore.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -14,11 +21,38 @@ const MAX_INPUT_LENGTH = 10_000
 const findingStatuses = new Set(['open', 'accepted', 'dismissed'])
 const createReviewLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+  // Five-file upload batches create five reviews, staying below this 10-review limit.
   limit: 10,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many reviews. Please try again later.' },
 })
+
+function parseSource(source) {
+  if (source === undefined) return { value: { kind: 'text' } }
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return { error: 'source must be an object.' }
+  if (source.kind === 'text') {
+    if (Object.keys(source).some((key) => key !== 'kind')) return { error: 'Text source must contain only the kind field.' }
+    return { value: { kind: 'text' } }
+  }
+  if (source.kind !== 'document') return { error: 'source.kind must be text or document.' }
+
+  const filename = typeof source.filename === 'string' ? sanitizeDocumentFilename(source.filename) : ''
+  if (!filename) return { error: 'source.filename must be a non-empty filename.' }
+  if (!['pdf', 'docx'].includes(source.fileType)) return { error: 'source.fileType must be pdf or docx.' }
+  if (source.fileType === 'pdf' && (!Number.isInteger(source.pageCount) || source.pageCount < 1)) {
+    return { error: 'source.pageCount must be a positive integer for PDF documents.' }
+  }
+  if (source.fileType === 'docx' && source.pageCount !== null) return { error: 'source.pageCount must be null for DOCX documents.' }
+  if (!Number.isInteger(source.charCount) || source.charCount < 0) return { error: 'source.charCount must be a non-negative integer.' }
+  if (typeof source.truncated !== 'boolean') return { error: 'source.truncated must be a boolean.' }
+  return {
+    value: {
+      kind: 'document', filename, fileType: source.fileType,
+      pageCount: source.pageCount, charCount: source.charCount, truncated: source.truncated,
+    },
+  }
+}
 
 export async function createReview(req, res) {
   const { inputText, brandName } = req.body ?? {}
@@ -27,7 +61,16 @@ export async function createReview(req, res) {
     return res.status(400).json({ error: 'inputText must be a non-empty string.' })
   }
 
-  const reviewText = inputText.slice(0, MAX_INPUT_LENGTH)
+  const parsedSource = parseSource(req.body?.source)
+  if (parsedSource.error) return res.status(400).json({ error: parsedSource.error })
+  const source = parsedSource.value
+  const maxLength = source.kind === 'document' ? getDocumentLimits().maxDocChars : MAX_INPUT_LENGTH
+  if (inputText.length > maxLength) {
+    return res.status(400).json({ error: source.kind === 'document'
+      ? `Document text must be no more than ${maxLength} characters.`
+      : `inputText must be no more than ${MAX_INPUT_LENGTH} characters.` })
+  }
+  const reviewText = inputText
   if (!reviewText.trim()) {
     return res.status(400).json({ error: 'inputText must be a non-empty string.' })
   }
@@ -35,24 +78,37 @@ export async function createReview(req, res) {
   if (brandName !== undefined && (typeof brandName !== 'string' || !brandName.trim())) {
     return res.status(400).json({ error: 'brandName must be a non-empty string when provided.' })
   }
+  if (req.body?.brand !== undefined && !mongoose.isValidObjectId(req.body.brand)) return res.status(400).json({ error: 'brand must be a valid brand id.' })
 
   if (req.body?.useAI !== undefined && typeof req.body.useAI !== 'boolean') {
     return res.status(400).json({ error: 'useAI must be a boolean when provided.' })
   }
+  if (req.body?.qualityChecks !== undefined && typeof req.body.qualityChecks !== 'boolean') {
+    return res.status(400).json({ error: 'qualityChecks must be a boolean when provided.' })
+  }
 
-  const reviewBrandName = brandName?.trim() ?? 'Nimbus Notes'
-  const { findings, summary, aiStatus, counts } = await runReview({
+  const brand = req.body?.brand ? await Brand.findById(req.body.brand) : mongoose.connection.readyState === 1 ? await Brand.findOne({ isDefault: true }) : null
+  if (req.body?.brand && !brand || mongoose.connection.readyState === 1 && !brand) return res.status(404).json({ error: 'Brand not found. Run the brand migration or create a default brand.' })
+  const reviewBrandName = brand?.name ?? brandName?.trim() ?? 'Nimbus Notes'
+  const { findings, summary, aiStatus, ai, counts, findingsTruncated } = await runReview({
     text: reviewText,
     brandName: reviewBrandName,
+    brandId: brand?._id,
     useAI: req.body?.useAI !== false,
+    qualityChecks: req.body?.qualityChecks !== false,
   })
   const review = await Review.create({
     inputText: reviewText,
     brandName: reviewBrandName,
+    ...(brand ? { brand: brand._id } : {}),
     findings,
     summary,
     aiStatus,
+    ai,
     counts,
+    findingsTruncated,
+    source,
+    qualityChecksRun: req.body?.qualityChecks !== false,
     createdBy: req.user._id ?? req.user.id,
   })
 
@@ -66,7 +122,7 @@ export async function createReview(req, res) {
 
 export async function listReviews(_req, res) {
   const reviews = await Review.find()
-    .select('brandName createdAt summary createdBy submittedBy decidedBy workflowStatus decisionNote submittedAt decidedAt')
+    .select('brandName createdAt summary createdBy submittedBy decidedBy workflowStatus decisionNote submittedAt decidedAt qualityChecksRun source aiStatus ai findingsTruncated')
     .populate('createdBy', 'name role')
     .populate('submittedBy', 'name role')
     .populate('decidedBy', 'name role')
@@ -262,9 +318,98 @@ export async function getReviewAudit(req, res) {
   return res.json(entries)
 }
 
+function parseReportOptions(query = {}) {
+  const values = { includeFullText: false, includeComments: true, includeAudit: true }
+  for (const key of Object.keys(values)) {
+    if (query[key] === undefined) continue
+    if (query[key] !== 'true' && query[key] !== 'false') return { error: `${key} must be true or false.` }
+    values[key] = query[key] === 'true'
+  }
+  return { value: values }
+}
+
+function reportResponse(res, report) {
+  res.set('Cache-Control', 'no-store')
+  return res.json(report)
+}
+
+export async function getReviewReport(req, res) {
+  res.set('Cache-Control', 'no-store')
+  const { id } = req.params
+  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'Review id is invalid.' })
+  const parsed = parseReportOptions(req.query)
+  if (parsed.error) return res.status(400).json({ error: parsed.error })
+  const review = await Review.findById(id)
+    .populate('createdBy', 'name role')
+    .populate('submittedBy', 'name role')
+    .populate('decidedBy', 'name role')
+    .populate('findings.statusChangedBy', 'name role')
+  if (!review) return res.status(404).json({ error: 'Review not found.' })
+  const [auditEntries, rules, facts] = await Promise.all([
+    AuditLog.find({ review: id }).select('actorName actorRole action from to note createdAt').sort({ createdAt: 1, _id: 1 }).limit(500).lean(),
+    (async () => {
+      const libraryBrand = review.brand ?? (mongoose.connection.readyState === 1 ? (await Brand.findOne({ isDefault: true }).select('_id').lean())?._id : null)
+      if (!libraryBrand) return Promise.all([Rule.find().select('code title').lean(), Fact.find().select('code statement source.name').lean()])
+      return Promise.all([
+        Rule.find({ brand: libraryBrand, status: 'active' }).select('code title').lean(),
+        Fact.find({ brand: libraryBrand, status: 'active' }).select('code statement source.name').lean(),
+      ])
+    })(),
+  ])
+  const [activeRules, activeFacts] = rules
+  const report = buildReport({ review, auditEntries, rules: activeRules ?? [], facts: activeFacts ?? [], qualityTitles: QUALITY_CHECK_TITLES, options: parsed.value, now: new Date(), generatedBy: req.user })
+  try {
+    await recordAudit({ review, user: req.user, action: 'report_exported', note: JSON.stringify({ options: parsed.value, fingerprint: report.fingerprint }) })
+  } catch (error) {
+    console.error('Failed to record report_exported audit entry:', error)
+  }
+  return reportResponse(res, report)
+}
+
+function batchSummary(review) {
+  const findings = review.findings ?? []
+  const total = { high: 0, medium: 0, low: 0, needsVerification: 0 }
+  for (const finding of findings) {
+    if (Object.hasOwn(total, finding.severity)) total[finding.severity] += 1
+    if (finding.type === 'needs_verification') total.needsVerification += 1
+  }
+  const reviewId = String(review._id)
+  return {
+    id: reviewId,
+    brandName: review.brandName,
+    source: review.source?.kind === 'document' ? review.source.filename : 'Pasted text',
+    createdAt: review.createdAt,
+    createdBy: review.createdBy ? { name: review.createdBy.name, role: review.createdBy.role } : null,
+    workflowStatus: review.workflowStatus ?? 'draft',
+    total: findings.length,
+    ...total,
+    complianceScore: calculateComplianceScore(findings),
+    aiStatus: review.aiStatus ?? 'disabled',
+    fingerprint: canonicalFingerprint(review),
+  }
+}
+
+export async function getReportSummary(req, res) {
+  const ids = req.body?.ids
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > 25 || ids.some((id) => typeof id !== 'string' || !mongoose.isValidObjectId(id))) {
+    return res.status(400).json({ error: 'ids must contain 1 to 25 valid review ids.' })
+  }
+  const uniqueIds = [...new Set(ids)]
+  const reviews = await Review.find({ _id: { $in: uniqueIds } })
+    .select('brandName createdAt createdBy workflowStatus findings summary aiStatus decidedAt source')
+    .populate('createdBy', 'name role')
+    .lean()
+  const byId = new Map(reviews.map((review) => [String(review._id), review]))
+  const ordered = uniqueIds.map((id) => byId.get(id)).filter(Boolean)
+  const missing = uniqueIds.filter((id) => !byId.has(id))
+  return res.json({ rows: ordered.map(batchSummary), missing })
+}
+
 router.post('/', createReviewLimiter, createReview)
 router.get('/', listReviews)
+router.post('/report-summary', getReportSummary)
 router.get('/:id/audit', getReviewAudit)
+router.get('/:id/report', getReviewReport)
 router.get('/:id', getReview)
 router.post('/:id/findings/:findingId/comments', addFindingComment)
 router.patch('/:id/findings/:findingId', changeFindingStatus)

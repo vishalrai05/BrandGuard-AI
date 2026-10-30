@@ -4,7 +4,9 @@ const MAX_CHARACTERS = 10_000
 
 function InputPanel({
   inputText, brandName, loading, onTextChange, onBrandNameChange,
+  hideBrandName = false,
   onLoadSample, onReview, onClear, useAI = true, onUseAIChange = () => {},
+  qualityChecks = true, onQualityChecksChange = () => {},
 }) {
   return (
     <section className="input-panel">
@@ -12,8 +14,8 @@ function InputPanel({
         <div><p className="eyebrow">Content review</p><h2>Check your copy before it ships</h2></div>
         <button className="text-link-button" onClick={onLoadSample} type="button">Load sample</button>
       </div>
-      <label className="field-label" htmlFor="brand-name">Brand name</label>
-      <input autoComplete="organization" className="text-input single-line" id="brand-name" maxLength={100} onChange={(event) => onBrandNameChange(event.target.value)} value={brandName} />
+      {!hideBrandName && <><label className="field-label" htmlFor="brand-name">Legacy brand name</label>
+      <input autoComplete="organization" className="text-input single-line" id="brand-name" maxLength={100} onChange={(event) => onBrandNameChange(event.target.value)} value={brandName} /></>}
       <label className="field-label" htmlFor="content">Marketing content</label>
       <textarea
         className="text-input content-input"
@@ -27,6 +29,11 @@ function InputPanel({
         <input checked={useAI} disabled={loading} onChange={(event) => onUseAIChange(event.target.checked)} type="checkbox" />
         <span>AI-assisted analysis</span>
         <small>On by default; findings are checked against your approved rules and facts.</small>
+      </label>
+      <label className="ai-toggle quality-toggle">
+        <input checked={qualityChecks} disabled={loading} onChange={(event) => onQualityChecksChange(event.target.checked)} type="checkbox" />
+        <span>Run readability and accessibility checks</span>
+        <small>On by default; checks are deterministic and work on plain text.</small>
       </label>
       <div className="input-foot">
         <span aria-live="polite" className="char-count">{inputText.length.toLocaleString()} / {MAX_CHARACTERS.toLocaleString()} characters</span>

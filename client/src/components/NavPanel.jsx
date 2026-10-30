@@ -55,6 +55,9 @@ function NavPanel({
             <Link className={`nav-row ${locationPathname === '/history' ? 'nav-row-active' : ''}`} to="/history">
               <span>All reviews</span><span className="count-badge">{libraryCounts.reviews}</span>
             </Link>
+            <Link className={`nav-row ${locationPathname === '/insights' ? 'nav-row-active' : ''}`} to="/insights">
+              <span>Insights</span><span className="nav-dot" />
+            </Link>
           </>
         )}
 
